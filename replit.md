@@ -80,7 +80,13 @@ Preferred communication style: Simple, everyday language.
 **Market Data Integration**
 - Yahoo Finance API used as primary market data source
 - Server-side proxy endpoints prevent CORS issues and enable caching
-- Quote data refreshed every 30 seconds via TanStack Query
+- **Server-Side Cache Layer** (`server/cache.ts`):
+  - In-memory cache with configurable TTL (30s for quotes, 5min for historical data)
+  - Rate limiting: minimum 1 second between external API calls
+  - Batch request handling with automatic delays between batches
+  - Automatic cache cleanup every 60 seconds
+  - Cache stats endpoint at `/api/cache/stats` for monitoring
+- Quote data refreshed every 30 seconds via TanStack Query (frontend)
 - Historical data fetched on-demand with configurable timeframes
 
 **Portfolio Calculations**

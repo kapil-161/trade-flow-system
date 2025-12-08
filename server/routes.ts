@@ -3,42 +3,18 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema } from "@shared/schema";
 import { z } from "zod";
+import { marketCache } from "./cache";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Market Data - Yahoo Finance proxy
+  // Market Data - Yahoo Finance proxy with caching
   app.get("/api/market/quote/:symbol", async (req, res) => {
     const { symbol } = req.params;
     
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        return res.status(404).json({ error: "Symbol not found" });
-      }
-
-      const data = await response.json();
-      const result = data.chart.result[0];
-      
-      if (!result) {
-        return res.status(404).json({ error: "No data available" });
-      }
-
-      const meta = result.meta;
-      const quote = {
-        symbol: meta.symbol,
-        price: meta.regularMarketPrice,
-        previousClose: meta.previousClose,
-        change: meta.regularMarketPrice - meta.previousClose,
-        changePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
-        volume: meta.regularMarketVolume,
-        marketCap: meta.marketCap,
-        name: meta.longName || meta.shortName || symbol,
-      };
-
+      const quote = await marketCache.getQuote(symbol);
       res.json(quote);
     } catch (error) {
       console.error("Error fetching quote:", error);
@@ -46,38 +22,17 @@ export async function registerRoutes(
     }
   });
 
-  // Get historical price data
+  // Get historical price data with caching
   app.get("/api/market/history/:symbol", async (req, res) => {
     const { symbol } = req.params;
     const { range = "1mo", interval = "1d" } = req.query;
 
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        return res.status(404).json({ error: "Symbol not found" });
-      }
-
-      const data = await response.json();
-      const result = data.chart.result[0];
-      
-      if (!result || !result.timestamp) {
-        return res.status(404).json({ error: "No data available" });
-      }
-
-      const timestamps = result.timestamp;
-      const quotes = result.indicators.quote[0];
-      
-      const history = timestamps.map((ts: number, i: number) => ({
-        date: new Date(ts * 1000).toISOString(),
-        open: quotes.open[i],
-        high: quotes.high[i],
-        low: quotes.low[i],
-        close: quotes.close[i],
-        volume: quotes.volume[i],
-      }));
-
+      const history = await marketCache.getHistory(
+        symbol, 
+        range as string, 
+        interval as string
+      );
       res.json(history);
     } catch (error) {
       console.error("Error fetching history:", error);
@@ -85,7 +40,7 @@ export async function registerRoutes(
     }
   });
 
-  // Multi-symbol quotes
+  // Multi-symbol quotes with caching
   app.post("/api/market/quotes", async (req, res) => {
     const { symbols } = req.body;
     
@@ -94,41 +49,17 @@ export async function registerRoutes(
     }
 
     try {
-      const quotes = await Promise.all(
-        symbols.map(async (symbol) => {
-          try {
-            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-            const response = await fetch(url);
-            const data = await response.json();
-            const result = data.chart.result[0];
-            const meta = result?.meta;
-
-            if (!meta) return null;
-
-            const price = meta.regularMarketPrice || 0;
-            const previousClose = meta.previousClose || meta.chartPreviousClose || price;
-            const change = price - previousClose;
-            const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
-
-            return {
-              symbol: meta.symbol,
-              price,
-              previousClose,
-              change,
-              changePercent,
-              volume: meta.regularMarketVolume || 0,
-            };
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      res.json(quotes.filter(q => q !== null));
+      const quotes = await marketCache.getMultiQuotes(symbols);
+      res.json(quotes);
     } catch (error) {
       console.error("Error fetching multiple quotes:", error);
       res.status(500).json({ error: "Failed to fetch quotes" });
     }
+  });
+
+  // Cache stats endpoint (for debugging)
+  app.get("/api/cache/stats", (req, res) => {
+    res.json(marketCache.getStats());
   });
 
   // Holdings CRUD
@@ -216,16 +147,13 @@ export async function registerRoutes(
             avgPrice: newAvgPrice.toFixed(2),
           });
         } else {
-          // Create new holding - get asset info from market data
+          // Create new holding - get asset info from cache
           try {
-            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${validatedData.symbol}?interval=1d&range=1d`;
-            const response = await fetch(url);
-            const data = await response.json();
-            const meta = data.chart.result[0]?.meta;
+            const quote = await marketCache.getQuote(validatedData.symbol);
             
             await storage.createHolding({
               symbol: validatedData.symbol,
-              name: meta?.longName || meta?.shortName || validatedData.symbol,
+              name: quote.name || validatedData.symbol,
               type: validatedData.symbol.match(/^(BTC|ETH|SOL|DOGE|ADA|XRP|DOT|MATIC|LINK|UNI|AAVE|AVAX|ATOM|ALGO|VET|FIL|XLM|NEAR|APT|ARB|OP)/) ? "crypto" : "stock",
               quantity: validatedData.quantity,
               avgPrice: validatedData.price,
@@ -292,27 +220,15 @@ export async function registerRoutes(
     }
   });
 
-  // Portfolio analytics
+  // Portfolio analytics with caching
   app.get("/api/portfolio/stats", async (req, res) => {
     try {
       const holdings = await storage.getAllHoldings();
       const trades = await storage.getAllTrades();
       
-      // Get current prices for all holdings
+      // Get current prices for all holdings using cache
       const symbols = holdings.map(h => h.symbol);
-      const quotes = await Promise.all(
-        symbols.map(async (symbol) => {
-          try {
-            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-            const response = await fetch(url);
-            const data = await response.json();
-            const meta = data.chart.result[0]?.meta;
-            return { symbol, price: meta?.regularMarketPrice || 0 };
-          } catch {
-            return { symbol, price: 0 };
-          }
-        })
-      );
+      const quotes = await marketCache.getMultiQuotes(symbols);
 
       const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
 
