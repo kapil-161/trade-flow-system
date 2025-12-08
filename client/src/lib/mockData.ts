@@ -20,16 +20,50 @@ export interface Trade {
   status: "filled" | "pending" | "cancelled";
 }
 
-export const portfolioHistory = [
-  { date: "09:00", value: 124000 },
-  { date: "10:00", value: 124500 },
-  { date: "11:00", value: 124200 },
-  { date: "12:00", value: 125100 },
-  { date: "13:00", value: 124800 },
-  { date: "14:00", value: 125400 },
-  { date: "15:00", value: 126200 },
-  { date: "16:00", value: 125800 },
-];
+// OHLC Data Interface
+export interface OHLCData {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+// Generate realistic OHLC data
+const generateOHLCData = (days: number, startPrice: number): OHLCData[] => {
+  let currentPrice = startPrice;
+  const data: OHLCData[] = [];
+  const now = new Date();
+
+  for (let i = days; i > 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    
+    const volatility = currentPrice * 0.02; // 2% daily volatility
+    const change = (Math.random() - 0.5) * volatility;
+    
+    const open = currentPrice;
+    const close = currentPrice + change;
+    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+    const volume = Math.floor(Math.random() * 1000000) + 500000;
+
+    data.push({
+      date: date.toISOString().split('T')[0],
+      open,
+      high,
+      low,
+      close,
+      volume
+    });
+
+    currentPrice = close;
+  }
+  return data;
+};
+
+export const portfolioHistory = generateOHLCData(30, 124000);
 
 export const assets: Asset[] = [
   { symbol: "BTC", name: "Bitcoin", quantity: 1.25, avgPrice: 45000, currentPrice: 68500, type: "crypto", allocation: 45 },

@@ -1,6 +1,6 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PortfolioSummary } from "@/components/dashboard/PortfolioSummary";
-import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
+import { FinancialChart } from "@/components/dashboard/FinancialChart";
 import { ActivePositions } from "@/components/dashboard/ActivePositions";
 import { MarketTicker } from "@/components/dashboard/MarketTicker";
 import { OrderDialog } from "@/components/dashboard/OrderDialog";
@@ -38,7 +38,7 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <PortfolioChart />
+            <FinancialChart />
           </div>
           <div className="lg:col-span-1">
              <RiskMonitor />
