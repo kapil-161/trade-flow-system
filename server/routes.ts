@@ -105,13 +105,18 @@ export async function registerRoutes(
 
             if (!meta) return null;
 
+            const price = meta.regularMarketPrice || 0;
+            const previousClose = meta.previousClose || meta.chartPreviousClose || price;
+            const change = price - previousClose;
+            const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+
             return {
               symbol: meta.symbol,
-              price: meta.regularMarketPrice,
-              previousClose: meta.previousClose,
-              change: meta.regularMarketPrice - meta.previousClose,
-              changePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
-              volume: meta.regularMarketVolume,
+              price,
+              previousClose,
+              change,
+              changePercent,
+              volume: meta.regularMarketVolume || 0,
             };
           } catch {
             return null;
