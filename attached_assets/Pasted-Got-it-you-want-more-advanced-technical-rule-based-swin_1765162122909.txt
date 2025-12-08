@@ -1,0 +1,171 @@
+Got it — you want more advanced, technical, rule-based swing-trading frameworks using:
+✔️ Weighted signals
+✔️ ATR-based stops
+✔️ Divergence
+✔️ Multi-factor confirmation
+✔️ Risk-managed entries
+
+Below are 5 advanced, professional-grade swing strategies that include all the components you asked for.
+(These are educational frameworks, not personal recommendations.)
+
+⸻
+
+✅ 1. Multi-Factor Weighted Momentum Strategy
+
+A strategy where each indicator contributes a score, and trades trigger only when total weight exceeds a threshold.
+
+Indicators & Weights Example
+
+Indicator	Condition	Weight
+EMA Trend	Price above 21 & 50 EMA	+3
+Volume	Volume > 20-day average	+2
+RSI	RSI 45–65 (healthy momentum zone)	+1
+MACD	MACD > Signal	+2
+ATR	ATR increasing (volatility expansion)	+2
+
+Signal:
+✔️ Enter long when score ≥ 7
+
+Exit
+	•	ATR-based trailing stop:
+
+Stop = Entry Price – (1.5 × ATR(14))
+
+
+
+Why it works
+
+Multi-factor weighting reduces false signals and focuses on high-conviction setups.
+
+⸻
+
+✅ 2. ATR Volatility-Adjusted Swing Strategy
+
+Focused entirely on volatility, not fixed stops.
+
+Entry
+	1.	Identify trend using EMA 34/89 crossover.
+	2.	Enter when price pulls back to EMA34 and prints a bullish candle.
+	3.	ATR must be rising, confirming volatility comeback.
+
+Stop-Loss (ATR)
+
+Stop-loss = Entry – (2 × ATR(14))
+Take-profit = Entry + (3 × ATR(14))
+
+Exit
+	•	Trail stop using 1 ATR below swing lows.
+
+Why it works
+
+Stops scale with market conditions — tighter when calm, wider when volatile.
+
+⸻
+
+✅ 3. RSI + MACD Divergence Strategy (Momentum Reversal)
+
+Uses hidden and regular divergences for precise swing reversal entries.
+
+Entry Conditions
+
+✔️ Price makes lower low,
+✔️ RSI makes higher low → bullish divergence
+✔️ MACD histogram rising from negative → positive
+✔️ Price reclaiming 20 EMA
+
+Stop
+	•	ATR-based:
+
+Stop = Swing low – 1×ATR
+
+
+
+Target
+	•	Resistance level
+	•	Or fixed R multiple:
+
+Target = 2R or 2.5R
+
+
+
+Why it works
+
+Divergence identifies weakness in trend before price turns — ideal for swing reversals.
+
+⸻
+
+✅ 4. Advanced Breakout + ATR Retest Strategy
+
+Breakouts fail often — ATR filtering helps remove weak setups.
+
+Entry
+	1.	Identify resistance with at least 3 touches.
+	2.	Breakout candle must be ≥1.2× ATR in size.
+	3.	Volume must be ≥1.5× average.
+	4.	On retest, enter only if candle stays above the level.
+
+Stop
+
+Stop = Retest level – (1 × ATR)
+
+Targets
+	•	2× ATR
+	•	Or previous high
+
+Why it works
+
+Combines volatility, structure, and volume to catch early trend expansions.
+
+⸻
+
+✅ 5. Weighted Divergence + Trend Continuation Strategy
+
+This hybrid strategy uses trend direction but confirms entry with momentum divergences.
+
+Scoring System Example
+
+Signal	Weight
+Price above 200 EMA (macro trend)	+2
+Price above 50 EMA (swing trend)	+2
+Hidden RSI Divergence	+3
+MACD histogram turning	+2
+ATR rising	+1
+
+Entry:
+✔️ Take trade when score ≥ 6
+✔️ Hidden divergence appears in direction of trend
+
+Stop
+
+Stop = Swing low – 1.2 ATR
+
+Take Profit
+	•	2× ATR OR
+	•	Next resistance zone
+
+Why it works
+
+Hidden divergence signals continuation — powerful for multi-day momentum trades.
+
+⸻
+
+📌 Summary Table
+
+Strategy Type	Main Tools	Style
+Weighted-Momentum	EMA, RSI, MACD, ATR	Trend
+ATR Volatility	EMA, ATR	Trend + timing
+Divergence Reversal	RSI, MACD	Reversal
+ATR Breakout	ATR, Volume	Expansion
+Weighted Divergence	Trend + Divergence	Hybrid
+
+
+⸻
+
+If you want, I can:
+📈 Create full trading rules (entry, exit, filters)
+🧮 Build weighting tables
+📊 Show sample backtest frameworks
+📱 Translate these into code (Python, Pine Script, or Node.js)
+🗒️ Generate a PDF-style trading system document
+
+This is general information only and not financial advice. For personal guidance, please talk to a licensed professional.
