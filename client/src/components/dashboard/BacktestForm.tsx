@@ -23,6 +23,20 @@ interface StrategyConfig {
   tpMultiplier: number;
 }
 
+const POPULAR_SYMBOLS = [
+  { label: "Bitcoin", value: "BTC-USD" },
+  { label: "Ethereum", value: "ETH-USD" },
+  { label: "Apple", value: "AAPL" },
+  { label: "Microsoft", value: "MSFT" },
+  { label: "Tesla", value: "TSLA" },
+  { label: "Amazon", value: "AMZN" },
+  { label: "Google", value: "GOOGL" },
+  { label: "Meta", value: "META" },
+  { label: "NVIDIA", value: "NVDA" },
+  { label: "S&P 500", value: "^GSPC" },
+  { label: "Nasdaq 100", value: "^NDX" },
+];
+
 export function BacktestForm({ onSuccess }: BacktestFormProps) {
   const [symbol, setSymbol] = useState("BTC-USD");
   const [range, setRange] = useState("3mo");
@@ -88,12 +102,18 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label className="text-xs">Symbol</Label>
-              <Input 
-                value={symbol} 
-                onChange={(e) => setSymbol(e.target.value)}
-                placeholder="BTC-USD"
-                data-testid="input-symbol"
-              />
+              <Select value={symbol} onValueChange={setSymbol}>
+                <SelectTrigger data-testid="select-symbol">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {POPULAR_SYMBOLS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label} ({s.value})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Timeframe</Label>
