@@ -65,7 +65,7 @@ export async function registerRoutes(
 
   // Backtesting endpoint
   app.post("/api/backtest/run", async (req, res) => {
-    const { symbol, range = "3mo", initialCapital = 10000 } = req.body;
+    const { symbol, range = "3mo", initialCapital = 10000, strategy } = req.body;
 
     if (!symbol) {
       return res.status(400).json({ error: "Symbol is required" });
@@ -73,7 +73,7 @@ export async function registerRoutes(
 
     try {
       const engine = new BacktestEngine();
-      const result = await engine.runMultiFactorStrategy(symbol, range, initialCapital);
+      const result = await engine.runMultiFactorStrategy(symbol, range, initialCapital, strategy);
       res.json(result);
     } catch (error) {
       console.error("Error running backtest:", error);

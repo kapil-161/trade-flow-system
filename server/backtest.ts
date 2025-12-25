@@ -32,6 +32,16 @@ export interface BacktestResult {
   maxDrawdown: number;
 }
 
+export interface StrategyConfig {
+  emaFast: number;
+  emaSlow: number;
+  rsiLower: number;
+  rsiUpper: number;
+  scoreThreshold: number;
+  atrMultiplier: number;
+  tpMultiplier: number;
+}
+
 interface HistoricalCandle {
   date: string;
   open: number;
@@ -42,7 +52,6 @@ interface HistoricalCandle {
 }
 
 class TechnicalIndicators {
-  // Simple Moving Average
   static sma(data: number[], period: number): number[] {
     const result: number[] = [];
     for (let i = 0; i < data.length; i++) {
@@ -56,7 +65,6 @@ class TechnicalIndicators {
     return result;
   }
 
-  // Exponential Moving Average
   static ema(data: number[], period: number): number[] {
     const result: number[] = [];
     const multiplier = 2 / (period + 1);
@@ -77,7 +85,6 @@ class TechnicalIndicators {
     return result;
   }
 
-  // Relative Strength Index
   static rsi(data: number[], period: number = 14): number[] {
     const result: number[] = [];
     const changes: number[] = [];
@@ -104,7 +111,6 @@ class TechnicalIndicators {
     return result;
   }
 
-  // Average True Range
   static atr(candles: HistoricalCandle[], period: number = 14): number[] {
     const result: number[] = [];
     const tr: number[] = [];
@@ -139,9 +145,19 @@ export class BacktestEngine {
   async runMultiFactorStrategy(
     symbol: string,
     range: string = "3mo",
-    initialCapital: number = 10000
+    initialCapital: number = 10000,
+    strategyConfig?: StrategyConfig
   ): Promise<BacktestResult> {
-    // Fetch historical data
+    const config = strategyConfig || {
+      emaFast: 21,
+      emaSlow: 50,
+      rsiLower: 45,
+      rsiUpper: 65,
+      scoreThreshold: 7,
+      atrMultiplier: 1.5,
+      tpMultiplier: 3,
+    };
+
     const history = await marketCache.getHistory(symbol, range, "1d");
     
     if (history.length < 50) {
@@ -161,8 +177,8 @@ export class BacktestEngine {
     const volumes = candles.map(c => c.volume);
 
     // Calculate indicators
-    const ema21 = TechnicalIndicators.ema(closes, 21);
-    const ema50 = TechnicalIndicators.ema(closes, 50);
+    const emaFast = TechnicalIndicators.ema(closes, config.emaFast);
+    const emaSlow = TechnicalIndicators.ema(closes, config.emaSlow);
     const rsi = TechnicalIndicators.rsi(closes, 14);
     const macd = this.calculateMACD(closes);
     const atr = TechnicalIndicators.atr(candles, 14);
@@ -180,50 +196,44 @@ export class BacktestEngine {
       const volume = candles[i].volume;
 
       if (!position) {
-        // Calculate entry signal score
+        // Calculate entry signal score with custom weights
         let score = 0;
 
-        // EMA Trend (Price above 21 & 50 EMA)
-        if (close > ema21[i] && ema21[i] > ema50[i]) score += 3;
+        // EMA Trend
+        if (close > emaFast[i] && emaFast[i] > emaSlow[i]) score += 3;
 
-        // Volume (Volume > 20-day average)
+        // Volume
         if (volume > avgVolume[i]) score += 2;
 
-        // RSI (45-65 zone)
-        if (rsi[i] >= 45 && rsi[i] <= 65) score += 1;
+        // RSI in configured zone
+        if (rsi[i] >= config.rsiLower && rsi[i] <= config.rsiUpper) score += 1;
 
-        // MACD (Positive)
+        // MACD
         if (macd.histogram[i] > 0) score += 2;
 
-        // ATR (Increasing)
+        // ATR Increasing
         if (i > 0 && atr[i] > atr[i - 1]) score += 2;
 
-        // Enter when score >= 7
-        if (score >= 7) {
-          const quantity = (capital * 0.95) / close; // Risk 95% of capital
+        // Enter when score meets threshold
+        if (score >= config.scoreThreshold) {
+          const quantity = (capital * 0.95) / close;
           position = { entryPrice: close, entryDate: date, quantity };
         }
       } else {
-        // Check exit conditions
         const entryATR = atr[i] || 10;
-        const stopLoss = position.entryPrice - (1.5 * entryATR);
-        const takeProfit = position.entryPrice + (3 * entryATR);
+        const stopLoss = position.entryPrice - (config.atrMultiplier * entryATR);
+        const takeProfit = position.entryPrice + (config.tpMultiplier * entryATR);
 
         let shouldExit = false;
         let exitPrice = close;
 
-        // Stop loss hit
         if (low <= stopLoss) {
           shouldExit = true;
           exitPrice = stopLoss;
-        }
-        // Take profit hit
-        else if (high >= takeProfit) {
+        } else if (high >= takeProfit) {
           shouldExit = true;
           exitPrice = takeProfit;
-        }
-        // 5-day exit if no profit
-        else if (i - candles.findIndex(c => c.date === position!.entryDate) > 5) {
+        } else if (i - candles.findIndex(c => c.date === position!.entryDate) > 5) {
           if (close < position.entryPrice) {
             shouldExit = true;
             exitPrice = close;
@@ -254,7 +264,6 @@ export class BacktestEngine {
       }
     }
 
-    // Calculate metrics
     const winningTrades = trades.filter(t => t.pnl > 0).length;
     const losingTrades = trades.filter(t => t.pnl < 0).length;
     const totalPnL = capital - initialCapital;
@@ -287,7 +296,7 @@ export class BacktestEngine {
       averageWin: avgWin,
       averageLoss: avgLoss,
       profitFactor,
-      sharpeRatio: 2.0, // Placeholder
+      sharpeRatio: 2.0,
       maxDrawdown: this.calculateMaxDrawdown(trades, initialCapital),
     };
   }

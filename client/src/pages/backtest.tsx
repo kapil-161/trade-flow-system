@@ -12,7 +12,7 @@ export default function Backtest() {
       <div className="flex flex-col space-y-6 pb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Strategy Backtest</h1>
-          <p className="text-muted-foreground">Test the Multi-Factor Weighted Momentum strategy on historical data.</p>
+          <p className="text-muted-foreground">Customize and test the weighted momentum strategy. Tweak parameters to find your edge.</p>
         </div>
 
         <BacktestForm onSuccess={setResult} />
