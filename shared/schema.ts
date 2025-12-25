@@ -77,3 +77,36 @@ export type InsertTrade = z.infer<typeof insertTradeSchema>;
 
 export type Watchlist = typeof watchlist.$inferSelect;
 export type InsertWatchlist = z.infer<typeof insertWatchlistSchema>;
+
+// Backtesting types (not stored in database - calculated on the fly)
+export interface BacktestTrade {
+  entryDate: string;
+  entryPrice: number;
+  exitDate: string;
+  exitPrice: number;
+  quantity: number;
+  side: "buy" | "sell";
+  pnl: number;
+  pnlPercent: number;
+  riskReward: number;
+}
+
+export interface BacktestResult {
+  symbol: string;
+  strategy: string;
+  startDate: string;
+  endDate: string;
+  initialCapital: number;
+  finalCapital: number;
+  totalPnL: number;
+  totalPnLPercent: number;
+  trades: BacktestTrade[];
+  winRate: number;
+  winningTrades: number;
+  losingTrades: number;
+  averageWin: number;
+  averageLoss: number;
+  profitFactor: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+}

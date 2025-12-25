@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema } from "@shared/schema";
 import { z } from "zod";
 import { marketCache } from "./cache";
+import { BacktestEngine } from "./backtest";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -60,6 +61,24 @@ export async function registerRoutes(
   // Cache stats endpoint (for debugging)
   app.get("/api/cache/stats", (req, res) => {
     res.json(marketCache.getStats());
+  });
+
+  // Backtesting endpoint
+  app.post("/api/backtest/run", async (req, res) => {
+    const { symbol, range = "3mo", initialCapital = 10000 } = req.body;
+
+    if (!symbol) {
+      return res.status(400).json({ error: "Symbol is required" });
+    }
+
+    try {
+      const engine = new BacktestEngine();
+      const result = await engine.runMultiFactorStrategy(symbol, range, initialCapital);
+      res.json(result);
+    } catch (error) {
+      console.error("Error running backtest:", error);
+      res.status(500).json({ error: "Failed to run backtest" });
+    }
   });
 
   // Holdings CRUD

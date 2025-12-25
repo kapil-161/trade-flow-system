@@ -4,11 +4,14 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
+import { Zap } from "lucide-react";
+
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: LineChart, label: "Market", href: "/market" },
   { icon: PieChart, label: "Portfolio", href: "/portfolio" },
   { icon: History, label: "History", href: "/history" },
+  { icon: Zap, label: "Backtest", href: "/backtest" },
   { icon: Bell, label: "Alerts", href: "/alerts" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
