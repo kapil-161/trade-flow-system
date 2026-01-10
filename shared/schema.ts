@@ -109,4 +109,12 @@ export interface BacktestResult {
   profitFactor: number;
   sharpeRatio: number;
   maxDrawdown: number;
+  historicalData: {
+    date: string;
+    close: number;
+    emaFast: number;
+    emaSlow: number;
+    rsi: number;
+    signal?: "buy" | "sell";
+  }[];
 }

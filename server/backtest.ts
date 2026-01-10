@@ -30,6 +30,14 @@ export interface BacktestResult {
   profitFactor: number;
   sharpeRatio: number;
   maxDrawdown: number;
+  historicalData: {
+    date: string;
+    close: number;
+    emaFast: number;
+    emaSlow: number;
+    rsi: number;
+    signal?: "buy" | "sell";
+  }[];
 }
 
 export interface StrategyConfig {
@@ -185,6 +193,7 @@ export class BacktestEngine {
     const avgVolume = this.calculateSMA(volumes, 20);
 
     const trades: BacktestTrade[] = [];
+    const signals: Record<string, "buy" | "sell"> = {};
     let capital = initialCapital;
     let position: { entryPrice: number; entryDate: string; quantity: number } | null = null;
 
@@ -196,28 +205,17 @@ export class BacktestEngine {
       const volume = candles[i].volume;
 
       if (!position) {
-        // Calculate entry signal score with custom weights
         let score = 0;
-
-        // EMA Trend
         if (close > emaFast[i] && emaFast[i] > emaSlow[i]) score += 3;
-
-        // Volume
         if (volume > avgVolume[i]) score += 2;
-
-        // RSI in configured zone
         if (rsi[i] >= config.rsiLower && rsi[i] <= config.rsiUpper) score += 1;
-
-        // MACD
         if (macd.histogram[i] > 0) score += 2;
-
-        // ATR Increasing
         if (i > 0 && atr[i] > atr[i - 1]) score += 2;
 
-        // Enter when score meets threshold
         if (score >= config.scoreThreshold) {
           const quantity = (capital * 0.95) / close;
           position = { entryPrice: close, entryDate: date, quantity };
+          signals[date] = "buy";
         }
       } else {
         const entryATR = atr[i] || 10;
@@ -258,11 +256,24 @@ export class BacktestEngine {
             riskReward,
           });
 
+          signals[date] = "sell";
           capital += pnl;
           position = null;
         }
       }
     }
+
+    const historicalData = candles.slice(50).map((c, i) => {
+      const idx = i + 50;
+      return {
+        date: c.date,
+        close: c.close,
+        emaFast: emaFast[idx],
+        emaSlow: emaSlow[idx],
+        rsi: rsi[idx],
+        signal: signals[c.date],
+      };
+    });
 
     const winningTrades = trades.filter(t => t.pnl > 0).length;
     const losingTrades = trades.filter(t => t.pnl < 0).length;
@@ -298,6 +309,7 @@ export class BacktestEngine {
       profitFactor,
       sharpeRatio: 2.0,
       maxDrawdown: this.calculateMaxDrawdown(trades, initialCapital),
+      historicalData,
     };
   }
 
