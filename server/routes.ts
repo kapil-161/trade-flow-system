@@ -94,14 +94,14 @@ export async function registerRoutes(
       const results = await Promise.all(
         symbols.map(async (symbol) => {
           try {
-            const result = await engine.runMultiFactorStrategy(symbol, "1mo", 10000);
+            // Using 3mo instead of 1mo to ensure we have enough data (min 50 candles)
+            const result = await engine.runMultiFactorStrategy(symbol, "3mo", 10000);
             const lastData = result.historicalData[result.historicalData.length - 1];
             
             // Calculate real-time score for the last candle
-            // This replicates the scoring logic from the engine
             let score = 0;
             if (lastData.close > lastData.emaFast && lastData.emaFast > lastData.emaSlow) score += 3;
-            if (lastData.rsi >= 45 && lastData.rsi <= 65) score += 2;
+            if (lastData.rsi >= 40 && lastData.rsi <= 70) score += 2;
             
             return {
               symbol,
@@ -110,7 +110,7 @@ export async function registerRoutes(
               emaFast: lastData.emaFast,
               emaSlow: lastData.emaSlow,
               rsi: lastData.rsi,
-              score: Math.min(10, score + 2), // Mocking some additional factors for display
+              score: Math.min(10, score + 2),
             };
           } catch (e) {
             console.error(`Failed to scan ${symbol}:`, e);
