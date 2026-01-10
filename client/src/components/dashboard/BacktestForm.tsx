@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { POPULAR_SYMBOLS } from "@shared/constants";
@@ -86,12 +87,14 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
                 <SelectTrigger data-testid="select-symbol">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {POPULAR_SYMBOLS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label} ({s.value})
-                    </SelectItem>
-                  ))}
+                <SelectContent className="max-h-[300px]">
+                  <ScrollArea className="h-full w-full">
+                    {POPULAR_SYMBOLS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label} ({s.value})
+                      </SelectItem>
+                    ))}
+                  </ScrollArea>
                 </SelectContent>
               </Select>
             </div>

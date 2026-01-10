@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { useState } from "react";
 import { Wallet } from "lucide-react";
@@ -99,12 +100,14 @@ export function OrderDialog({ children }: OrderDialogProps) {
                   <SelectTrigger data-testid="select-symbol">
                     <SelectValue placeholder="Symbol" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {POPULAR_SYMBOLS.map((s) => (
-                      <SelectItem key={s.value} value={s.value.split("-")[0]}>
-                        {s.label} ({s.value.split("-")[0]})
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-[300px]">
+                    <ScrollArea className="h-full w-full">
+                      {POPULAR_SYMBOLS.map((s) => (
+                        <SelectItem key={s.value} value={s.value.split("-")[0]}>
+                          {s.label} ({s.value.split("-")[0]})
+                        </SelectItem>
+                      ))}
+                    </ScrollArea>
                   </SelectContent>
                 </Select>
               </div>
