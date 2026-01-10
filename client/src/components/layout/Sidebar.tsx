@@ -8,7 +8,7 @@ import { Zap } from "lucide-react";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: LineChart, label: "Market", href: "/market" },
+  { icon: LineChart, label: "Market Scanner", href: "/market" },
   { icon: PieChart, label: "Portfolio", href: "/portfolio" },
   { icon: History, label: "History", href: "/history" },
   { icon: Zap, label: "Backtest", href: "/backtest" },
