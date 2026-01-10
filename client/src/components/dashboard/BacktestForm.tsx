@@ -9,42 +9,11 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { POPULAR_SYMBOLS } from "@shared/constants";
 
 interface BacktestFormProps {
   onSuccess: (result: any) => void;
 }
-
-interface StrategyConfig {
-  emaFast: number;
-  emaSlow: number;
-  rsiLower: number;
-  rsiUpper: number;
-  scoreThreshold: number;
-  atrMultiplier: number;
-  tpMultiplier: number;
-  trendFilter: boolean;
-  volatilityFilter: boolean;
-}
-
-const POPULAR_SYMBOLS = [
-  { label: "Bitcoin", value: "BTC-USD" },
-  { label: "Ethereum", value: "ETH-USD" },
-  { label: "Apple", value: "AAPL" },
-  { label: "Microsoft", value: "MSFT" },
-  { label: "NVIDIA", value: "NVDA" },
-  { label: "Tesla", value: "TSLA" },
-  { label: "Amazon", value: "AMZN" },
-  { label: "Google", value: "GOOGL" },
-  { label: "Meta", value: "META" },
-  { label: "JPMorgan", value: "JPM" },
-  { label: "Visa", value: "V" },
-  { label: "ExxonMobil", value: "XOM" },
-  { label: "UnitedHealth", value: "UNH" },
-  { label: "Eli Lilly", value: "LLY" },
-  { label: "Walmart", value: "WMT" },
-  { label: "S&P 500", value: "^GSPC" },
-  { label: "Nasdaq 100", value: "^NDX" },
-];
 
 export function BacktestForm({ onSuccess }: BacktestFormProps) {
   const [symbol, setSymbol] = useState("BTC-USD");
@@ -53,7 +22,7 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
   const [showStrategy, setShowStrategy] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  const [strategy, setStrategy] = useState<StrategyConfig>({
+  const [strategy, setStrategy] = useState({
     emaFast: 21,
     emaSlow: 50,
     rsiLower: 45,

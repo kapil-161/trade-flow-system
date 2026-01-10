@@ -9,16 +9,7 @@ import { Play, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const SECTORS = {
-  TECH: ["AAPL", "MSFT", "NVDA", "GOOGL", "META", "AVGO", "ORCL", "CRM"],
-  FINANCE: ["JPM", "BAC", "WFC", "GS", "MS", "V", "MA", "PYPL"],
-  CRYPTO: ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "ADA-USD", "XRP-USD"],
-  ENERGY: ["XOM", "CVX", "SHEL", "BP", "TTE", "COP"],
-  HEALTHCARE: ["LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE"],
-  CONSUMER: ["AMZN", "WMT", "COST", "HD", "PG", "KO", "PEP"],
-  INDICES: ["^GSPC", "^NDX", "^DJI", "^RUT"]
-};
+import { MARKET_SECTORS } from "@shared/constants";
 
 interface AnalysisResult {
   symbol: string;
@@ -41,7 +32,7 @@ export default function BatchAnalysis() {
     setResults({});
     
     try {
-      const allSymbols = Object.values(SECTORS).flat();
+      const allSymbols = Object.values(MARKET_SECTORS).flat();
       const response = await fetch("/api/backtest/batch-scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +43,7 @@ export default function BatchAnalysis() {
       const data: AnalysisResult[] = await response.json();
       
       const grouped: Record<string, AnalysisResult[]> = {};
-      Object.entries(SECTORS).forEach(([sector, symbols]) => {
+      Object.entries(MARKET_SECTORS).forEach(([sector, symbols]) => {
         grouped[sector] = data.filter(r => symbols.includes(r.symbol));
       });
       
@@ -89,14 +80,14 @@ export default function BatchAnalysis() {
 
         <Tabs value={activeSector} onValueChange={setActiveSector} className="w-full">
           <TabsList className="bg-card/50 backdrop-blur-md border border-border/50 overflow-x-auto flex-nowrap w-full justify-start h-auto p-1">
-            {Object.keys(SECTORS).map(sector => (
+            {Object.keys(MARKET_SECTORS).map(sector => (
               <TabsTrigger key={sector} value={sector} className="px-4 py-2">
                 {sector}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {Object.keys(SECTORS).map(sector => (
+          {Object.keys(MARKET_SECTORS).map(sector => (
             <TabsContent key={sector} value={sector} className="mt-6">
               <Card className="bg-card/50 backdrop-blur-md border-border/50">
                 <CardHeader>
