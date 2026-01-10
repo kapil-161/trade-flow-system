@@ -5,11 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Play, TrendingUp, TrendingDown } from "lucide-react";
+import { Play, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MARKET_SECTORS } from "@shared/constants";
+import { useCreateTrade } from "@/lib/api";
 
 interface AnalysisResult {
   symbol: string;
@@ -26,6 +27,31 @@ export default function BatchAnalysis() {
   const [isScanning, setIsScanning] = useState(false);
   const [activeSector, setActiveSector] = useState("TECH");
   const { toast } = useToast();
+  const createTrade = useCreateTrade();
+
+  const handleAddToPortfolio = async (result: AnalysisResult) => {
+    try {
+      await createTrade.mutateAsync({
+        symbol: result.symbol,
+        side: "buy",
+        quantity: "1", // Default to 1 for quick add
+        price: result.price.toFixed(2),
+        totalValue: result.price.toFixed(2),
+        fees: "0",
+        status: "filled",
+      });
+      toast({
+        title: "Added to Portfolio",
+        description: `Successfully added 1 ${result.symbol} at $${result.price.toFixed(2)}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add to portfolio",
+        variant: "destructive",
+      });
+    }
+  };
 
   const runAnalysis = async () => {
     setIsScanning(true);
@@ -108,6 +134,7 @@ export default function BatchAnalysis() {
                           <TableHead className="text-right">RSI</TableHead>
                           <TableHead className="text-right">Score</TableHead>
                           <TableHead>Trend</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -141,6 +168,19 @@ export default function BatchAnalysis() {
                                   {r.emaFast > r.emaSlow ? "Bullish" : "Bearish"}
                                 </span>
                               </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1"
+                                onClick={() => handleAddToPortfolio(r)}
+                                disabled={createTrade.isPending}
+                                data-testid={`button-add-portfolio-${r.symbol}`}
+                              >
+                                <Plus className="h-3 w-3" />
+                                Add
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
