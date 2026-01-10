@@ -48,6 +48,8 @@ export interface StrategyConfig {
   scoreThreshold: number;
   atrMultiplier: number;
   tpMultiplier: number;
+  trendFilter: boolean;
+  volatilityFilter: boolean;
 }
 
 interface HistoricalCandle {
@@ -162,8 +164,10 @@ export class BacktestEngine {
       rsiLower: 45,
       rsiUpper: 65,
       scoreThreshold: 7,
-      atrMultiplier: 1.5,
-      tpMultiplier: 3,
+      atrMultiplier: 2.0, // Increased default SL
+      tpMultiplier: 4.0, // Increased default TP
+      trendFilter: true,
+      volatilityFilter: true,
     };
 
     const history = await marketCache.getHistory(symbol, range, "1d");
@@ -187,6 +191,7 @@ export class BacktestEngine {
     // Calculate indicators
     const emaFast = TechnicalIndicators.ema(closes, config.emaFast);
     const emaSlow = TechnicalIndicators.ema(closes, config.emaSlow);
+    const ema200 = TechnicalIndicators.ema(closes, 200);
     const rsi = TechnicalIndicators.rsi(closes, 14);
     const macd = this.calculateMACD(closes);
     const atr = TechnicalIndicators.atr(candles, 14);
@@ -195,7 +200,7 @@ export class BacktestEngine {
     const trades: BacktestTrade[] = [];
     const signals: Record<string, "buy" | "sell"> = {};
     let capital = initialCapital;
-    let position: { entryPrice: number; entryDate: string; quantity: number } | null = null;
+    let position: { entryPrice: number; entryDate: string; quantity: number; stopLoss: number; takeProfit: number } | null = null;
 
     for (let i = 50; i < candles.length; i++) {
       const close = candles[i].close;
@@ -205,43 +210,71 @@ export class BacktestEngine {
       const volume = candles[i].volume;
 
       if (!position) {
+        // IMPROVED ENTRY LOGIC
         let score = 0;
+
+        // 1. Trend Filter: Price MUST be above 200 EMA for long-term health
+        if (config.trendFilter && i >= 200) {
+          if (close < ema200[i]) continue;
+        }
+
+        // 2. EMA Trend
         if (close > emaFast[i] && emaFast[i] > emaSlow[i]) score += 3;
-        if (volume > avgVolume[i]) score += 2;
-        if (rsi[i] >= config.rsiLower && rsi[i] <= config.rsiUpper) score += 1;
-        if (macd.histogram[i] > 0) score += 2;
-        if (i > 0 && atr[i] > atr[i - 1]) score += 2;
+
+        // 3. Volume Confirmation
+        if (volume > avgVolume[i] * 1.2) score += 2;
+
+        // 4. RSI Pullback zone
+        if (rsi[i] >= config.rsiLower && rsi[i] <= config.rsiUpper) score += 2;
+
+        // 5. MACD Momentum
+        if (macd.histogram[i] > 0 && macd.histogram[i] > macd.histogram[i-1]) score += 2;
+
+        // 6. Volatility Filter: Don't enter if volatility is too low
+        if (config.volatilityFilter && i > 0 && atr[i] < atr[i-1] * 0.8) continue;
 
         if (score >= config.scoreThreshold) {
-          const quantity = (capital * 0.95) / close;
-          position = { entryPrice: close, entryDate: date, quantity };
-          signals[date] = "buy";
+          const entryATR = atr[i] || 10;
+          const sl = close - (config.atrMultiplier * entryATR);
+          const tp = close + (config.tpMultiplier * entryATR);
+          
+          const riskPerShare = close - sl;
+          const riskAmount = capital * 0.02; // Risk only 2% per trade
+          const quantity = Math.floor(riskAmount / riskPerShare);
+
+          if (quantity > 0) {
+            position = { entryPrice: close, entryDate: date, quantity, stopLoss: sl, takeProfit: tp };
+            signals[date] = "buy";
+          }
         }
       } else {
-        const entryATR = atr[i] || 10;
-        const stopLoss = position.entryPrice - (config.atrMultiplier * entryATR);
-        const takeProfit = position.entryPrice + (config.tpMultiplier * entryATR);
-
+        // IMPROVED EXIT LOGIC
         let shouldExit = false;
         let exitPrice = close;
 
-        if (low <= stopLoss) {
+        // Trailing Stop Loss
+        const currentATR = atr[i] || 10;
+        const trailingSL = close - (config.atrMultiplier * currentATR);
+        if (trailingSL > position.stopLoss) {
+          position.stopLoss = trailingSL;
+        }
+
+        if (low <= position.stopLoss) {
           shouldExit = true;
-          exitPrice = stopLoss;
-        } else if (high >= takeProfit) {
+          exitPrice = position.stopLoss;
+        } else if (high >= position.takeProfit) {
           shouldExit = true;
-          exitPrice = takeProfit;
-        } else if (i - candles.findIndex(c => c.date === position!.entryDate) > 5) {
-          if (close < position.entryPrice) {
-            shouldExit = true;
-            exitPrice = close;
-          }
+          exitPrice = position.takeProfit;
+        } else if (emaFast[i] < emaSlow[i]) {
+          // Trend reversal exit
+          shouldExit = true;
+          exitPrice = close;
         }
 
         if (shouldExit) {
           const pnl = (exitPrice - position.entryPrice) * position.quantity;
           const pnlPercent = ((exitPrice - position.entryPrice) / position.entryPrice) * 100;
-          const riskAmount = (position.entryPrice - stopLoss) * position.quantity;
+          const riskAmount = (position.entryPrice - position.stopLoss) * position.quantity;
           const riskReward = riskAmount > 0 ? Math.abs(pnl) / riskAmount : 0;
 
           trades.push({

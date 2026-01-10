@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
@@ -21,6 +22,8 @@ interface StrategyConfig {
   scoreThreshold: number;
   atrMultiplier: number;
   tpMultiplier: number;
+  trendFilter: boolean;
+  volatilityFilter: boolean;
 }
 
 const POPULAR_SYMBOLS = [
@@ -50,8 +53,10 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
     rsiLower: 45,
     rsiUpper: 65,
     scoreThreshold: 7,
-    atrMultiplier: 1.5,
-    tpMultiplier: 3,
+    atrMultiplier: 2.0,
+    tpMultiplier: 4.0,
+    trendFilter: true,
+    volatilityFilter: true,
   });
 
   const { toast } = useToast();
@@ -149,13 +154,13 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
             data-testid="button-toggle-strategy"
           >
             {showStrategy ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            Customize Strategy Parameters
+            Advanced Strategy Settings
           </button>
 
           {/* Strategy Parameters */}
           {showStrategy && (
             <div className="space-y-4 pt-4 border-t border-border/40">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 {/* EMA Settings */}
                 <div>
                   <Label className="text-xs mb-2 block">Fast EMA: <span className="text-primary">{strategy.emaFast}</span></Label>
@@ -165,7 +170,6 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
                     min={5}
                     max={50}
                     step={1}
-                    data-testid="slider-ema-fast"
                   />
                 </div>
                 <div>
@@ -176,77 +180,51 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
                     min={20}
                     max={200}
                     step={5}
-                    data-testid="slider-ema-slow"
                   />
                 </div>
 
-                {/* RSI Settings */}
-                <div>
-                  <Label className="text-xs mb-2 block">RSI Lower: <span className="text-primary">{strategy.rsiLower}</span></Label>
-                  <Slider
-                    value={[strategy.rsiLower]}
-                    onValueChange={(v) => setStrategy({...strategy, rsiLower: v[0]})}
-                    min={20}
-                    max={50}
-                    step={1}
-                    data-testid="slider-rsi-lower"
+                {/* Filters */}
+                <div className="flex items-center justify-between p-2 rounded bg-white/5 border border-white/10">
+                  <Label className="text-xs">200 EMA Trend Filter</Label>
+                  <Switch 
+                    checked={strategy.trendFilter} 
+                    onCheckedChange={(v) => setStrategy({...strategy, trendFilter: v})} 
                   />
                 </div>
-                <div>
-                  <Label className="text-xs mb-2 block">RSI Upper: <span className="text-primary">{strategy.rsiUpper}</span></Label>
-                  <Slider
-                    value={[strategy.rsiUpper]}
-                    onValueChange={(v) => setStrategy({...strategy, rsiUpper: v[0]})}
-                    min={50}
-                    max={80}
-                    step={1}
-                    data-testid="slider-rsi-upper"
+                <div className="flex items-center justify-between p-2 rounded bg-white/5 border border-white/10">
+                  <Label className="text-xs">Volatility Filter (ATR)</Label>
+                  <Switch 
+                    checked={strategy.volatilityFilter} 
+                    onCheckedChange={(v) => setStrategy({...strategy, volatilityFilter: v})} 
                   />
                 </div>
 
-                {/* Score Threshold */}
+                {/* Risk Management */}
                 <div>
-                  <Label className="text-xs mb-2 block">Entry Score: <span className="text-primary">{strategy.scoreThreshold}</span></Label>
-                  <Slider
-                    value={[strategy.scoreThreshold]}
-                    onValueChange={(v) => setStrategy({...strategy, scoreThreshold: v[0]})}
-                    min={3}
-                    max={10}
-                    step={0.5}
-                    data-testid="slider-score"
-                  />
-                </div>
-
-                {/* ATR Multiplier */}
-                <div>
-                  <Label className="text-xs mb-2 block">ATR Multiplier: <span className="text-primary">{strategy.atrMultiplier.toFixed(1)}x</span></Label>
+                  <Label className="text-xs mb-2 block">Stop Loss (ATR x): <span className="text-primary">{strategy.atrMultiplier.toFixed(1)}</span></Label>
                   <Slider
                     value={[strategy.atrMultiplier]}
                     onValueChange={(v) => setStrategy({...strategy, atrMultiplier: v[0]})}
-                    min={0.5}
-                    max={3}
+                    min={1}
+                    max={4}
                     step={0.1}
-                    data-testid="slider-atr"
                   />
                 </div>
-
-                {/* TP Multiplier */}
                 <div>
-                  <Label className="text-xs mb-2 block">TP Multiplier: <span className="text-primary">{strategy.tpMultiplier.toFixed(1)}x</span></Label>
+                  <Label className="text-xs mb-2 block">Take Profit (ATR x): <span className="text-primary">{strategy.tpMultiplier.toFixed(1)}</span></Label>
                   <Slider
                     value={[strategy.tpMultiplier]}
                     onValueChange={(v) => setStrategy({...strategy, tpMultiplier: v[0]})}
-                    min={1}
-                    max={5}
+                    min={2}
+                    max={8}
                     step={0.1}
-                    data-testid="slider-tp"
                   />
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">
-                💡 <strong>Tip:</strong> Lower score threshold = more trades. Higher RSI range = fewer signals. Try different combinations to find your edge.
-              </p>
+              <div className="p-3 rounded bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-200">
+                🚀 <strong>Improvement Tip:</strong> Enabling the <strong>200 EMA Filter</strong> ensures you only trade with the major trend, which significantly reduces losses in choppy markets.
+              </div>
             </div>
           )}
 
@@ -258,7 +236,7 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
             data-testid="button-run-backtest"
           >
             {isLoading ? <Spinner className="mr-2 h-4 w-4" /> : null}
-            {isLoading ? "Running Backtest..." : "Test Strategy"}
+            {isLoading ? "Optimizing Strategy..." : "Run Backtest"}
           </Button>
         </form>
       </CardContent>
