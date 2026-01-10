@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Play, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { Play, TrendingUp, TrendingDown, Plus, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -140,7 +141,12 @@ export default function BatchAnalysis() {
                       <TableBody>
                         {(results[sector] || []).map((r) => (
                           <TableRow key={r.symbol} className="border-border/40 hover:bg-white/5 transition-colors">
-                            <TableCell className="font-bold">{r.symbol}</TableCell>
+                            <TableCell className="font-bold">
+                              <Link href={`/backtest?symbol=${r.symbol}`} className="flex items-center gap-1.5 hover:text-primary transition-colors group">
+                                {r.symbol}
+                                <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </Link>
+                            </TableCell>
                             <TableCell>
                               <Badge 
                                 className={cn(
