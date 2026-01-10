@@ -10,6 +10,7 @@ import { Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateTrade, usePortfolioStats } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { POPULAR_SYMBOLS } from "@shared/constants";
 
 interface OrderDialogProps {
   children: React.ReactNode;
@@ -99,13 +100,11 @@ export function OrderDialog({ children }: OrderDialogProps) {
                     <SelectValue placeholder="Symbol" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BTC">Bitcoin (BTC)</SelectItem>
-                    <SelectItem value="ETH">Ethereum (ETH)</SelectItem>
-                    <SelectItem value="SOL">Solana (SOL)</SelectItem>
-                    <SelectItem value="NVDA">NVIDIA (NVDA)</SelectItem>
-                    <SelectItem value="TSLA">Tesla (TSLA)</SelectItem>
-                    <SelectItem value="AAPL">Apple (AAPL)</SelectItem>
-                    <SelectItem value="MSFT">Microsoft (MSFT)</SelectItem>
+                    {POPULAR_SYMBOLS.map((s) => (
+                      <SelectItem key={s.value} value={s.value.split("-")[0]}>
+                        {s.label} ({s.value.split("-")[0]})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
