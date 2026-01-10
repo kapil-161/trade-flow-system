@@ -88,7 +88,7 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
-                  <ScrollArea className="h-full w-full">
+                  <ScrollArea className="h-[280px] w-full">
                     {POPULAR_SYMBOLS.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         {s.label} ({s.value})

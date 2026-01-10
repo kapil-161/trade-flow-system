@@ -101,10 +101,10 @@ export function OrderDialog({ children }: OrderDialogProps) {
                     <SelectValue placeholder="Symbol" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
-                    <ScrollArea className="h-full w-full">
+                    <ScrollArea className="h-[280px] w-full">
                       {POPULAR_SYMBOLS.map((s) => (
-                        <SelectItem key={s.value} value={s.value.split("-")[0]}>
-                          {s.label} ({s.value.split("-")[0]})
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label} ({s.value})
                         </SelectItem>
                       ))}
                     </ScrollArea>
