@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Portfolio from "@/pages/portfolio";
+import History from "@/pages/history";
 import Backtest from "@/pages/backtest";
 import BatchAnalysis from "@/pages/batch-analysis";
 
@@ -15,7 +16,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/market" component={BatchAnalysis} />
       <Route path="/portfolio" component={Portfolio} />
-      <Route path="/history" component={Dashboard} />
+      <Route path="/history" component={History} />
       <Route path="/backtest" component={Backtest} />
       <Route path="/alerts" component={Dashboard} />
       <Route path="/settings" component={Dashboard} />
