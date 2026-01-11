@@ -5,13 +5,40 @@ export const MARKET_SECTORS = {
   ENERGY: ["XOM", "CVX", "SHEL", "BP", "TTE", "COP"],
   HEALTHCARE: ["LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE"],
   CONSUMER: ["AMZN", "WMT", "COST", "HD", "PG", "KO", "PEP"],
-  INDICES: ["^GSPC", "^NDX", "^DJI", "^RUT"]
+  INDICES: ["^GSPC", "^NDX", "^DJI", "^RUT"],
+  NEW_PICKS: ["DHI", "CISS", "LRCX", "NVDA", "HNGE", "TSM", "FIG", "BLSH", "GEMI", "FIGR", "KLAR", "VIA", "STUB", "PTRN", "FRMI", "META", "MSFT", "SLV", "NAVN", "NOK", "GLOO", "RAMP", "DRI", "AVAV", "AVGO", "RTX", "GPUS", "NFLX", "CINT", "TOO"]
 };
 
 export const ALL_SYMBOLS = Object.values(MARKET_SECTORS).flat();
 
 // Map of symbols to human-readable names for UI display
 export const SYMBOL_NAMES: Record<string, string> = {
+  "DHI": "D.R. Horton",
+  "CISS": "Cisner",
+  "LRCX": "Lam Research",
+  "HNGE": "Henge",
+  "TSM": "TSMC",
+  "FIG": "Fortress",
+  "BLSH": "Blush",
+  "GEMI": "Gemini",
+  "FIGR": "Figur",
+  "KLAR": "Klar",
+  "VIA": "Via",
+  "STUB": "Stub",
+  "PTRN": "Pattern",
+  "FRMI": "Fermi",
+  "SLV": "Silver Trust",
+  "NAVN": "Navient",
+  "NOK": "Nokia",
+  "GLOO": "Gloo",
+  "RAMP": "LiveRamp",
+  "DRI": "Darden Restaurants",
+  "AVAV": "AeroVironment",
+  "RTX": "RTX Corp",
+  "GPUS": "GPUs",
+  "NFLX": "Netflix",
+  "CINT": "Cintas",
+  "TOO": "Teekay Offshore",
   "AAPL": "Apple",
   "MSFT": "Microsoft",
   "NVDA": "NVIDIA",
