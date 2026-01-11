@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Portfolio from "@/pages/portfolio";
 import History from "@/pages/history";
+import Alerts from "@/pages/alerts";
 import Backtest from "@/pages/backtest";
 import BatchAnalysis from "@/pages/batch-analysis";
 
@@ -17,8 +18,8 @@ function Router() {
       <Route path="/market" component={BatchAnalysis} />
       <Route path="/portfolio" component={Portfolio} />
       <Route path="/history" component={History} />
+      <Route path="/alerts" component={Alerts} />
       <Route path="/backtest" component={Backtest} />
-      <Route path="/alerts" component={Dashboard} />
       <Route path="/settings" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>
