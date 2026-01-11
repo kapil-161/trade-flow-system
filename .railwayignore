@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.local
+*.log
+.local
+dist
+.vite
+.cache
+coverage
+.DS_Store
