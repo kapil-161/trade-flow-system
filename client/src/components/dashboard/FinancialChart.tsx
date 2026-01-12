@@ -1,42 +1,26 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { portfolioHistory, OHLCData } from "@/lib/mockData";
-import { ResponsiveContainer, XAxis, YAxis, Tooltip, BarChart, Bar, Cell, ComposedChart, Line } from "recharts";
+import { portfolioHistory } from "@/lib/mockData";
+import { ResponsiveContainer, XAxis, YAxis, Tooltip, ComposedChart, Bar, Cell } from "recharts";
+import { useMemo } from "react";
 
-// Custom Candle Shape
-const Candle = (props: any) => {
-  const { x, y, width, height, low, high, open, close } = props;
-  const isUp = close > open;
-  const color = isUp ? "hsl(142, 71%, 45%)" : "hsl(0, 84%, 60%)";
-  const bodyHeight = Math.abs(open - close);
-  const bodyY = isUp ? close : open;
-  
-  // Calculate pixel positions for high/low based on the chart's scale
-  // Note: Recharts passes the pixel values for y (open/close) but we need to map high/low manually 
-  // or rely on the fact that we can't easily do mixed scale drawing in a simple custom shape without context.
-  // 
-  // SIMPLIFICATION: Since mapping exact pixels for High/Low inside a custom shape without axis context is hard in Recharts,
-  // we will use a ComposedChart with a Bar for the body and ErrorBars for wicks, OR simpler:
-  // We will visualize the "Trend" using a Bar chart where:
-  // - The Bar represents the range from Open to Close.
-  // - We add a "Line" for the High/Low if possible, but for this prototype, a "Heikin-Ashi" style or just Open/Close bars 
-  // with a separate Volume bar chart is cleaner.
-  
-  // ALTERNATIVE: Draw a simple bar that represents the body.
-  // We will use the standard BarChart but color it based on price movement.
-  
-  return (
-    <rect 
-      x={x} 
-      y={y} 
-      width={width} 
-      height={height} 
-      fill={color} 
-      rx={2}
-    />
-  );
+// Transform OHLC data for candlestick visualization
+const transformDataForCandlesticks = (data: typeof portfolioHistory) => {
+  return data.map(d => ({
+    ...d,
+    // For candlestick body - from open to close
+    candleBottom: Math.min(d.open, d.close),
+    candleHeight: Math.abs(d.close - d.open),
+    // For wicks - full high to low range
+    wickBottom: d.low,
+    wickHeight: d.high - d.low,
+    // Color indicator
+    isUp: d.close >= d.open,
+  }));
 };
 
 export function FinancialChart() {
+  const candlestickData = useMemo(() => transformDataForCandlesticks(portfolioHistory), []);
+
   return (
     <Card className="col-span-1 lg:col-span-2 bg-card/50 backdrop-blur-md border-border/50">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -46,8 +30,8 @@ export function FinancialChart() {
             <button
               key={tf}
               className={`px-3 py-1 rounded-md transition-all ${
-                tf === "1M" 
-                  ? "bg-primary text-primary-foreground shadow-sm" 
+                tf === "1M"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-white/5"
               }`}
             >
@@ -59,79 +43,132 @@ export function FinancialChart() {
       <CardContent className="pl-0">
         <div className="h-[350px] w-full mt-4">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={portfolioHistory} barGap={0}>
+            <ComposedChart data={candlestickData} barGap={0} barCategoryGap="15%">
               <defs>
                 <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis 
-                dataKey="date" 
-                stroke="hsl(var(--muted-foreground))" 
-                fontSize={12} 
-                tickLine={false} 
+              <XAxis
+                dataKey="date"
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={12}
+                tickLine={false}
                 axisLine={false}
                 dy={10}
                 minTickGap={30}
               />
-              <YAxis 
+              <YAxis
                 yAxisId="price"
-                stroke="hsl(var(--muted-foreground))" 
-                fontSize={12} 
-                tickLine={false} 
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={12}
+                tickLine={false}
                 axisLine={false}
                 domain={['auto', 'auto']}
-                tickFormatter={(value) => `$${(value/1000).toFixed(0)}k`}
+                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                 dx={-10}
               />
-              <YAxis 
+              <YAxis
                 yAxisId="volume"
                 orientation="right"
-                stroke="hsl(var(--muted-foreground))" 
-                fontSize={10} 
-                tickLine={false} 
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={10}
+                tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => `${(value/1000000).toFixed(1)}M`}
+                tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
                 hide={true}
               />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: "hsl(var(--popover))", 
-                  borderColor: "hsl(var(--border))",
-                  borderRadius: "var(--radius)",
-                  boxShadow: "var(--shadow-lg)"
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload || !payload.length) return null;
+
+                  const data = payload[0].payload;
+                  const isUp = data.isUp;
+
+                  return (
+                    <div className="rounded-lg border bg-popover p-3 shadow-md">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">{data.date}</p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">Open:</span>
+                          <span className="font-mono">${data.open.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">High:</span>
+                          <span className="font-mono text-profit">${data.high.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">Low:</span>
+                          <span className="font-mono text-loss">${data.low.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">Close:</span>
+                          <span className={`font-mono ${isUp ? 'text-profit' : 'text-loss'}`}>
+                            ${data.close.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-4 pt-1 border-t">
+                          <span className="text-muted-foreground">Volume:</span>
+                          <span className="font-mono text-xs">{(data.volume / 1000000).toFixed(2)}M</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">Change:</span>
+                          <span className={`font-mono text-xs ${isUp ? 'text-profit' : 'text-loss'}`}>
+                            {isUp ? '+' : ''}{((data.close - data.open) / data.open * 100).toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
                 }}
-                itemStyle={{ color: "hsl(var(--foreground))" }}
-                cursor={{ fill: "hsl(var(--muted)/0.2)" }}
-                labelStyle={{ color: "hsl(var(--muted-foreground))" }}
               />
-              
-              {/* Volume Bars */}
-              <Bar 
+
+              {/* Volume Bars in background */}
+              <Bar
                 yAxisId="volume"
-                dataKey="volume" 
-                fill="hsl(var(--primary))" 
-                opacity={0.15} 
-                barSize={20}
+                dataKey="volume"
+                fill="url(#volumeGradient)"
+                opacity={0.2}
                 radius={[4, 4, 0, 0]}
               />
 
-              {/* Price Line (Close) */}
-              <Line
+              {/* Candlestick Wicks (thin bars for high-low range) */}
+              <Bar
                 yAxisId="price"
-                type="monotone"
-                dataKey="close"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 6, fill: "hsl(var(--primary))" }}
-              />
-              
-              {/* We simulate High/Low range with a floating bar if we wanted, 
-                  but for a clean dashboard, line + volume is often preferred 
-                  unless building a dedicated technical analysis view. 
-                  Let's keep it Line + Volume for clarity but structure data as OHLC. */}
+                dataKey="wickHeight"
+                stackId="wick"
+                fill="transparent"
+                stroke="transparent"
+              >
+                {candlestickData.map((entry, index) => (
+                  <Cell
+                    key={`wick-${index}`}
+                    fill={entry.isUp ? "hsl(142, 71%, 45%)" : "hsl(0, 84%, 60%)"}
+                    stroke={entry.isUp ? "hsl(142, 71%, 45%)" : "hsl(0, 84%, 60%)"}
+                    strokeWidth={1.5}
+                  />
+                ))}
+              </Bar>
+
+              {/* Candlestick Bodies (thick bars for open-close range) */}
+              <Bar
+                yAxisId="price"
+                dataKey="candleHeight"
+                stackId="candle"
+                fill="transparent"
+                barSize={10}
+              >
+                {candlestickData.map((entry, index) => (
+                  <Cell
+                    key={`candle-${index}`}
+                    fill={entry.isUp ? "transparent" : "hsl(0, 84%, 60%)"}
+                    stroke={entry.isUp ? "hsl(142, 71%, 45%)" : "hsl(0, 84%, 60%)"}
+                    strokeWidth={entry.isUp ? 2 : 0}
+                    fillOpacity={entry.isUp ? 0 : 1}
+                  />
+                ))}
+              </Bar>
             </ComposedChart>
           </ResponsiveContainer>
         </div>
