@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { POPULAR_SYMBOLS } from "@shared/constants";
+import { POPULAR_SYMBOLS, ALL_SYMBOLS, SYMBOL_NAMES } from "@shared/constants";
 import { useLocation } from "wouter";
 
 interface BacktestFormProps {
@@ -19,13 +20,20 @@ interface BacktestFormProps {
 
 export function BacktestForm({ onSuccess }: BacktestFormProps) {
   const [location] = useLocation();
-  const [symbol, setSymbol] = useState("BTC-USD");
   
-  // Handle symbol from URL query params
+  // Initialize symbol from URL query params or default
+  const getInitialSymbol = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("symbol") || "BTC-USD";
+  };
+  
+  const [symbol, setSymbol] = useState(getInitialSymbol);
+  
+  // Handle symbol from URL query params when location changes
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const symbolParam = params.get("symbol");
-    if (symbolParam) {
+    if (symbolParam && symbolParam !== symbol) {
       setSymbol(symbolParam);
     }
   }, [location]);
@@ -48,6 +56,19 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
   });
 
   const { toast } = useToast();
+
+  // Create symbol options list that includes current symbol if not in popular list
+  const symbolOptions = useMemo(() => {
+    const options = [...POPULAR_SYMBOLS];
+    // Add current symbol if it's not already in the list
+    if (symbol && !ALL_SYMBOLS.includes(symbol)) {
+      options.unshift({
+        label: SYMBOL_NAMES[symbol] || symbol,
+        value: symbol
+      });
+    }
+    return options;
+  }, [symbol]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,11 +118,11 @@ export function BacktestForm({ onSuccess }: BacktestFormProps) {
               <Label className="text-xs">Symbol</Label>
               <Select value={symbol} onValueChange={setSymbol}>
                 <SelectTrigger data-testid="select-symbol">
-                  <SelectValue />
+                  <SelectValue placeholder="Select symbol" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
                   <ScrollArea className="h-[280px] w-full">
-                    {POPULAR_SYMBOLS.map((s) => (
+                    {symbolOptions.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         {s.label} ({s.value})
                       </SelectItem>
