@@ -2,8 +2,10 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ActivePositions } from "@/components/dashboard/ActivePositions";
 import { OrderDialog } from "@/components/dashboard/OrderDialog";
 import { ExportDialog, ImportDialog } from "@/components/portfolio/PortfolioImportExport";
+import { PortfolioAnalytics } from "@/components/portfolio/PortfolioAnalytics";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, BarChart3, Briefcase } from "lucide-react";
 
 export default function Portfolio() {
   return (
@@ -27,7 +29,26 @@ export default function Portfolio() {
           </div>
         </div>
 
-        <ActivePositions />
+        <Tabs defaultValue="positions" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="positions" className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              Positions
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="positions" className="mt-6">
+            <ActivePositions />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="mt-6">
+            <PortfolioAnalytics />
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
