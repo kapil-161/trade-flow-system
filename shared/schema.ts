@@ -213,3 +213,81 @@ export interface BacktestResult {
     signal?: "buy" | "sell";
   }[];
 }
+
+// Risk Analytics types (calculated on the fly)
+export interface PortfolioRiskMetrics {
+  // Value at Risk metrics
+  valueAtRisk: {
+    var95: number; // 95% confidence VaR (1-day)
+    var99: number; // 99% confidence VaR (1-day)
+    cvar95: number; // Conditional VaR (expected loss beyond VaR)
+    cvar99: number;
+  };
+
+  // Volatility metrics
+  volatility: {
+    daily: number; // Daily volatility (standard deviation of returns)
+    annualized: number; // Annualized volatility
+    downsideDeviation: number; // Downside volatility (negative returns only)
+  };
+
+  // Return metrics
+  returns: {
+    daily: number; // Average daily return
+    annualized: number; // Annualized return
+    cumulative: number; // Total return since inception
+  };
+
+  // Risk-adjusted returns
+  sharpeRatio: number; // (Return - RiskFreeRate) / Volatility
+  sortinoRatio: number; // (Return - RiskFreeRate) / DownsideDeviation
+  calmarRatio: number; // AnnualizedReturn / MaxDrawdown
+
+  // Drawdown metrics
+  maxDrawdown: number; // Maximum peak-to-trough decline
+  currentDrawdown: number; // Current drawdown from peak
+  maxDrawdownDuration: number; // Days in max drawdown
+
+  // Beta and correlation (vs market benchmark)
+  beta: number; // Sensitivity to market movements
+  alpha: number; // Excess return vs benchmark
+  correlation: number; // Correlation with market
+
+  // Portfolio composition risk
+  concentrationRisk: number; // Herfindahl index (0-1, higher = more concentrated)
+  diversificationRatio: number; // Portfolio vol / weighted avg vol
+}
+
+export interface AssetRiskMetrics {
+  symbol: string;
+  name: string;
+
+  // Contribution to portfolio risk
+  portfolioWeight: number; // % of total portfolio value
+  marginContribution: number; // Contribution to portfolio VaR
+  componentVaR: number; // VaR attributable to this asset
+
+  // Individual asset metrics
+  volatility: number; // Annualized volatility
+  beta: number; // Beta vs portfolio
+  sharpeRatio: number;
+  maxDrawdown: number;
+
+  // Current risk status
+  currentValue: number;
+  unrealizedPnL: number;
+  unrealizedPnLPercent: number;
+}
+
+export interface CorrelationMatrix {
+  symbols: string[];
+  matrix: number[][]; // Correlation coefficients (-1 to 1)
+  timestamp: Date;
+}
+
+export interface RiskAnalytics {
+  portfolio: PortfolioRiskMetrics;
+  assets: AssetRiskMetrics[];
+  correlations: CorrelationMatrix;
+  calculatedAt: Date;
+}
