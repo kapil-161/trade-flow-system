@@ -44,21 +44,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(username: string, password: string) {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-      credentials: "include",
-    });
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        credentials: "include",
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Login failed");
+      if (!response.ok) {
+        let errorMessage = "Login failed";
+        try {
+          const error = await response.json();
+          errorMessage = error.error || error.message || errorMessage;
+        } catch {
+          // If response isn't JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const userData = await response.json();
+      setUser(userData);
+      setLocation("/");
+    } catch (error: any) {
+      // Re-throw to let the calling component handle it
+      throw error;
     }
-
-    const userData = await response.json();
-    setUser(userData);
-    setLocation("/");
   }
 
   async function register(username: string, password: string) {
@@ -80,12 +92,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
 
-    if (response.ok) {
+      // Always clear user state and redirect, even if request fails
+      setUser(null);
+      setLocation("/login");
+      
+      if (!response.ok) {
+        console.error("Logout request failed:", response.status);
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Still clear user state and redirect on error
       setUser(null);
       setLocation("/login");
     }

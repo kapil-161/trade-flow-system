@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { usePortfolioStats } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Zap } from "lucide-react";
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
 export function Sidebar() {
   const [location] = useLocation();
   const { data: stats } = usePortfolioStats();
+  const { logout } = useAuth();
 
   const NavContent = () => (
     <div className="flex flex-col h-full py-4">
@@ -68,7 +70,11 @@ export function Sidebar() {
           )}
         </div>
         
-        <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          onClick={logout}
+        >
           <LogOut className="h-5 w-5" />
           Log Out
         </Button>
