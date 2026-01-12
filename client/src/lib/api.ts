@@ -269,3 +269,63 @@ export function usePortfolioStats() {
     refetchInterval: 60000, // Refresh every minute
   });
 }
+
+// Scanner Signal Types
+export interface ScannerSignal {
+  symbol: string;
+  signal: "buy" | "sell" | "hold";
+  price: number;
+  emaFast: number;
+  emaSlow: number;
+  rsi: number;
+  score: number;
+  rsiDivergence: "bullish" | "bearish" | "none";
+  volumeDivergence: "bullish" | "bearish" | "none";
+}
+
+export interface ScannerSignalsResponse {
+  results: ScannerSignal[];
+  scanDate: string;
+}
+
+// Portfolio Scanner Signals Hook - fetches signals for portfolio holdings
+export function usePortfolioScannerSignals(symbols: string[]) {
+  return useQuery<Record<string, ScannerSignal>>({
+    queryKey: ["portfolio-scanner-signals", symbols],
+    queryFn: async () => {
+      if (symbols.length === 0) return {};
+      
+      const response = await fetch("/api/backtest/batch-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbols,
+          config: {
+            emaFast: 21,
+            emaSlow: 50,
+            rsiLower: 45,
+            rsiUpper: 65,
+            scoreThreshold: 7,
+            trendFilter: true,
+            volatilityFilter: true,
+          },
+        }),
+        credentials: "include",
+      });
+      
+      if (!response.ok) throw new Error("Failed to fetch scanner signals");
+      const data: ScannerSignalsResponse = await response.json();
+      
+      // Convert array to object keyed by symbol for easy lookup
+      const signalsMap: Record<string, ScannerSignal> = {};
+      data.results.forEach((signal) => {
+        signalsMap[signal.symbol] = signal;
+      });
+      
+      return signalsMap;
+    },
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    enabled: symbols.length > 0,
+    staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
+  });
+}

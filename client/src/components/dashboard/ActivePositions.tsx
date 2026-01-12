@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { MoreVertical, Edit2, Trash2, Trash } from "lucide-react";
-import { useHoldings, useMultiQuotes, useUpdateHolding, useDeleteHolding, useDeleteAllHoldings } from "@/lib/api";
+import { MoreVertical, Edit2, Trash2, Trash, ArrowUpCircle, ArrowDownCircle, Minus } from "lucide-react";
+import { useHoldings, useMultiQuotes, useUpdateHolding, useDeleteHolding, useDeleteAllHoldings, usePortfolioScannerSignals } from "@/lib/api";
 import { useRealtimeQuotes } from "@/lib/websocket";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,9 @@ export function ActivePositions() {
   // Use real-time WebSocket quotes, fallback to REST API
   const realtimeQuotes = useRealtimeQuotes(symbols);
   const { data: restQuotes = [], isLoading: quotesLoading } = useMultiQuotes(symbols);
+  
+  // Fetch scanner signals for portfolio holdings
+  const { data: scannerSignals = {}, isLoading: signalsLoading } = usePortfolioScannerSignals(symbols);
   
   // Merge real-time quotes with REST quotes (real-time takes precedence)
   const quotes = symbols.map(symbol => {
@@ -193,6 +198,8 @@ export function ActivePositions() {
                     const pnl = value - cost;
                     const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
+                    const scannerSignal = scannerSignals[holding.symbol];
+                    
                     return (
                       <div 
                         key={holding.id} 
@@ -203,6 +210,42 @@ export function ActivePositions() {
                           <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
                             {holding.symbol}
                           </div>
+                          {scannerSignal && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge
+                                    variant={
+                                      scannerSignal.signal === "buy" ? "default" :
+                                      scannerSignal.signal === "sell" ? "destructive" : "secondary"
+                                    }
+                                    className={cn(
+                                      "text-xs font-medium gap-1 cursor-help",
+                                      scannerSignal.signal === "buy" && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                      scannerSignal.signal === "sell" && "bg-red-500/20 text-red-400 border-red-500/30",
+                                      scannerSignal.signal === "hold" && "bg-muted text-muted-foreground"
+                                    )}
+                                  >
+                                    {scannerSignal.signal === "buy" && <ArrowUpCircle className="h-3 w-3" />}
+                                    {scannerSignal.signal === "sell" && <ArrowDownCircle className="h-3 w-3" />}
+                                    {scannerSignal.signal === "hold" && <Minus className="h-3 w-3" />}
+                                    {scannerSignal.signal.toUpperCase()}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <div className="space-y-1 text-xs">
+                                    <div className="font-semibold">Scanner Signal: {scannerSignal.signal.toUpperCase()}</div>
+                                    <div>Score: {scannerSignal.score}/10</div>
+                                    <div>RSI: {scannerSignal.rsi.toFixed(1)}</div>
+                                    <div>EMA Trend: {scannerSignal.emaFast > scannerSignal.emaSlow ? "Bullish" : "Bearish"}</div>
+                                    <div className="text-muted-foreground mt-1 pt-1 border-t border-border/50">
+                                      Based on latest market scanner analysis
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                           <div className="text-sm text-muted-foreground font-mono-nums">
                             {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
                           </div>
@@ -255,6 +298,8 @@ export function ActivePositions() {
                     const pnl = value - cost;
                     const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
+                    const scannerSignal = scannerSignals[holding.symbol];
+                    
                     return (
                       <div 
                         key={holding.id} 
@@ -265,6 +310,42 @@ export function ActivePositions() {
                           <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
                             {holding.symbol}
                           </div>
+                          {scannerSignal && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge
+                                    variant={
+                                      scannerSignal.signal === "buy" ? "default" :
+                                      scannerSignal.signal === "sell" ? "destructive" : "secondary"
+                                    }
+                                    className={cn(
+                                      "text-xs font-medium gap-1 cursor-help",
+                                      scannerSignal.signal === "buy" && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                      scannerSignal.signal === "sell" && "bg-red-500/20 text-red-400 border-red-500/30",
+                                      scannerSignal.signal === "hold" && "bg-muted text-muted-foreground"
+                                    )}
+                                  >
+                                    {scannerSignal.signal === "buy" && <ArrowUpCircle className="h-3 w-3" />}
+                                    {scannerSignal.signal === "sell" && <ArrowDownCircle className="h-3 w-3" />}
+                                    {scannerSignal.signal === "hold" && <Minus className="h-3 w-3" />}
+                                    {scannerSignal.signal.toUpperCase()}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <div className="space-y-1 text-xs">
+                                    <div className="font-semibold">Scanner Signal: {scannerSignal.signal.toUpperCase()}</div>
+                                    <div>Score: {scannerSignal.score}/10</div>
+                                    <div>RSI: {scannerSignal.rsi.toFixed(1)}</div>
+                                    <div>EMA Trend: {scannerSignal.emaFast > scannerSignal.emaSlow ? "Bullish" : "Bearish"}</div>
+                                    <div className="text-muted-foreground mt-1 pt-1 border-t border-border/50">
+                                      Based on latest market scanner analysis
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                           <div className="text-sm text-muted-foreground font-mono-nums">
                             {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} shares
                           </div>

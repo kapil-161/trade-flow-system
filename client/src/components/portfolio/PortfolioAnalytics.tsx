@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useHoldings, usePortfolioStats, useTrades } from "@/lib/api";
 import { TrendingUp, TrendingDown, Activity, PieChart, BarChart3, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -291,57 +292,270 @@ export function PortfolioAnalytics() {
       {/* Performance Insights */}
       <Card>
         <CardHeader>
-          <CardTitle>Performance Insights</CardTitle>
-          <CardDescription>Analysis and recommendations based on your portfolio metrics</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Performance Insights & Recommendations
+          </CardTitle>
+          <CardDescription>AI-powered analysis and actionable recommendations based on your portfolio metrics</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Risk Assessment</h4>
-            <p className="text-sm text-muted-foreground">
-              {volatility < 2 ? (
-                "Your portfolio shows low volatility, indicating stable performance with lower risk exposure."
-              ) : volatility < 5 ? (
-                "Your portfolio has moderate volatility. Consider diversifying if you're risk-averse."
-              ) : (
-                "Your portfolio exhibits high volatility. Consider rebalancing towards more stable assets if this exceeds your risk tolerance."
+        <CardContent className="space-y-6">
+          {/* Generate and Display Recommendations */}
+          {useMemo(() => {
+            const recommendations: Array<{
+              priority: "high" | "medium" | "low";
+              category: string;
+              title: string;
+              description: string;
+              action?: string;
+              icon: React.ReactNode;
+            }> = [];
+
+            // Risk Assessment
+            if (volatility > 5) {
+              recommendations.push({
+                priority: "high",
+                category: "Risk Management",
+                title: "High Volatility Detected",
+                description: `Your portfolio volatility is ${volatility.toFixed(1)}%, which is considered high. This indicates significant price swings.`,
+                action: "Consider adding defensive assets (bonds, stablecoins) or reducing position sizes in volatile holdings.",
+                icon: <TrendingDown className="h-4 w-4 text-loss" />,
+              });
+            } else if (volatility < 2 && (stats.totalPnLPercent || 0) < 5) {
+              recommendations.push({
+                priority: "medium",
+                category: "Growth Opportunity",
+                title: "Low Risk, Low Return",
+                description: "Your portfolio has low volatility but also low returns. You may be too conservative.",
+                action: "Consider allocating a small portion to growth assets to improve returns while maintaining overall stability.",
+                icon: <TrendingUp className="h-4 w-4 text-yellow-500" />,
+              });
+            }
+
+            // Sharpe Ratio Analysis
+            if ((stats.sharpeRatio || 0) < 0) {
+              recommendations.push({
+                priority: "high",
+                category: "Performance",
+                title: "Negative Risk-Adjusted Returns",
+                description: "Your Sharpe ratio is negative, meaning returns aren't compensating for risk.",
+                action: "Review your trading strategy. Consider: 1) Improving entry/exit timing, 2) Reducing position sizes, 3) Adding stop-losses.",
+                icon: <Activity className="h-4 w-4 text-loss" />,
+              });
+            } else if ((stats.sharpeRatio || 0) > 0 && (stats.sharpeRatio || 0) < 1) {
+              recommendations.push({
+                priority: "medium",
+                category: "Performance",
+                title: "Suboptimal Risk-Adjusted Returns",
+                description: `Your Sharpe ratio of ${(stats.sharpeRatio || 0).toFixed(2)} is below the ideal threshold of 1.0.`,
+                action: "Focus on improving win rate or reducing risk. Consider backtesting strategies before deploying capital.",
+                icon: <Target className="h-4 w-4 text-yellow-500" />,
+              });
+            }
+
+            // Diversification Analysis
+            if (assetAllocation.length === 0) {
+              recommendations.push({
+                priority: "high",
+                category: "Portfolio Building",
+                title: "Empty Portfolio",
+                description: "Start building your portfolio by adding your first positions.",
+                action: "Use the 'New Order' button to add holdings. Consider starting with diversified positions across different asset types.",
+                icon: <PieChart className="h-4 w-4 text-primary" />,
+              });
+            } else if (assetAllocation.length < 3) {
+              recommendations.push({
+                priority: "high",
+                category: "Diversification",
+                title: "Low Diversification",
+                description: `You only have ${assetAllocation.length} position(s). Concentration risk is high.`,
+                action: "Add more positions across different sectors/asset types. Aim for at least 5-10 holdings for better diversification.",
+                icon: <BarChart3 className="h-4 w-4 text-loss" />,
+              });
+            } else if (assetAllocation[0]?.percentage > 40) {
+              recommendations.push({
+                priority: "high",
+                category: "Concentration Risk",
+                title: "High Position Concentration",
+                description: `Your largest position (${assetAllocation[0].symbol}) represents ${assetAllocation[0].percentage.toFixed(1)}% of your portfolio.`,
+                action: `Consider reducing ${assetAllocation[0].symbol} to below 20-25% and redistributing to other positions.`,
+                icon: <TrendingDown className="h-4 w-4 text-loss" />,
+              });
+            } else if (typeDiversification.length === 1) {
+              recommendations.push({
+                priority: "medium",
+                category: "Diversification",
+                title: "Single Asset Type",
+                description: `Your portfolio only contains ${typeDiversification[0].type} assets.`,
+                action: "Consider adding positions in other asset types (stocks if you only have crypto, or vice versa) to reduce correlation risk.",
+                icon: <PieChart className="h-4 w-4 text-yellow-500" />,
+              });
+            }
+
+            // Win Rate Analysis
+            if ((stats.winRate || 0) < 40 && stats.totalTrades >= 10) {
+              recommendations.push({
+                priority: "high",
+                category: "Trading Strategy",
+                title: "Low Win Rate",
+                description: `Your win rate is ${(stats.winRate || 0).toFixed(1)}%, which is below the recommended 50%+.`,
+                action: "Review losing trades: 1) Improve entry timing using technical analysis, 2) Tighten stop-losses, 3) Let winners run longer, 4) Avoid revenge trading.",
+                icon: <Activity className="h-4 w-4 text-loss" />,
+              });
+            } else if ((stats.winRate || 0) >= 60 && stats.totalTrades >= 10) {
+              recommendations.push({
+                priority: "low",
+                category: "Performance",
+                title: "Excellent Win Rate",
+                description: `Your win rate of ${(stats.winRate || 0).toFixed(1)}% is excellent! Keep up the good work.`,
+                action: "Consider scaling up successful strategies while maintaining risk management discipline.",
+                icon: <TrendingUp className="h-4 w-4 text-profit" />,
+              });
+            }
+
+            // Drawdown Analysis
+            if (maxDrawdown > 30) {
+              recommendations.push({
+                priority: "high",
+                category: "Risk Management",
+                title: "Severe Drawdown",
+                description: `Your maximum drawdown of ${maxDrawdown.toFixed(1)}% is severe and indicates poor risk management.`,
+                action: "Implement strict stop-losses (5-10% per position). Never risk more than 1-2% of capital per trade. Consider reducing position sizes.",
+                icon: <TrendingDown className="h-4 w-4 text-loss" />,
+              });
+            } else if (maxDrawdown > 20) {
+              recommendations.push({
+                priority: "medium",
+                category: "Risk Management",
+                title: "Significant Drawdown",
+                description: `Your maximum drawdown of ${maxDrawdown.toFixed(1)}% is significant.`,
+                action: "Implement stop-loss strategies and position sizing rules. Consider taking partial profits at resistance levels.",
+                icon: <Activity className="h-4 w-4 text-yellow-500" />,
+              });
+            }
+
+            // P&L Analysis
+            if ((stats.totalPnLPercent || 0) < -10) {
+              recommendations.push({
+                priority: "high",
+                category: "Performance",
+                title: "Significant Losses",
+                description: `Your portfolio is down ${Math.abs(stats.totalPnLPercent || 0).toFixed(1)}%.`,
+                action: "Review all positions. Consider: 1) Cutting losses on underperformers, 2) Rebalancing to winners, 3) Taking a break to reassess strategy.",
+                icon: <TrendingDown className="h-4 w-4 text-loss" />,
+              });
+            } else if ((stats.totalPnLPercent || 0) > 20) {
+              recommendations.push({
+                priority: "low",
+                category: "Performance",
+                title: "Strong Performance",
+                description: `Your portfolio is up ${(stats.totalPnLPercent || 0).toFixed(1)}%! Excellent work.`,
+                action: "Consider taking partial profits on winners and rebalancing. Protect gains with trailing stop-losses.",
+                icon: <TrendingUp className="h-4 w-4 text-profit" />,
+              });
+            }
+
+            // Trade Frequency Analysis
+            if (stats.totalTrades > 50) {
+              recommendations.push({
+                priority: "medium",
+                category: "Trading Behavior",
+                title: "High Trade Frequency",
+                description: `You've made ${stats.totalTrades} trades. High frequency can lead to overtrading.`,
+                action: "Focus on quality over quantity. Wait for high-probability setups. Overtrading often reduces win rate due to transaction costs and emotional decisions.",
+                icon: <Activity className="h-4 w-4 text-yellow-500" />,
+              });
+            } else if (stats.totalTrades < 5 && assetAllocation.length > 0) {
+              recommendations.push({
+                priority: "low",
+                category: "Trading Behavior",
+                title: "Low Trade Frequency",
+                description: "You have few trades relative to your holdings. This suggests a buy-and-hold approach.",
+                action: "Consider reviewing positions periodically. Even long-term holdings benefit from occasional rebalancing.",
+                icon: <BarChart3 className="h-4 w-4 text-muted-foreground" />,
+              });
+            }
+
+            return recommendations;
+          }, [stats, volatility, maxDrawdown, assetAllocation, typeDiversification]).map((rec, index) => (
+            <div
+              key={index}
+              className={cn(
+                "p-4 rounded-lg border space-y-2",
+                rec.priority === "high"
+                  ? "border-loss/50 bg-loss/5"
+                  : rec.priority === "medium"
+                  ? "border-yellow-500/50 bg-yellow-500/5"
+                  : "border-primary/50 bg-primary/5"
               )}
+            >
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "mt-0.5",
+                  rec.priority === "high" ? "text-loss" :
+                  rec.priority === "medium" ? "text-yellow-500" : "text-primary"
+                )}>
+                  {rec.icon}
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold">{rec.title}</h4>
+                    <Badge
+                      variant={
+                        rec.priority === "high" ? "destructive" :
+                        rec.priority === "medium" ? "default" : "secondary"
+                      }
+                      className="text-xs"
+                    >
+                      {rec.priority.toUpperCase()}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {rec.category}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{rec.description}</p>
+                  {rec.action && (
+                    <div className="pt-2 border-t border-border/50">
+                      <p className="text-sm font-medium text-foreground">💡 Recommendation:</p>
+                      <p className="text-sm text-muted-foreground mt-1">{rec.action}</p>
+          </div>
+                  )}
+                </div>
+              </div>
+          </div>
+          ))}
+
+          {/* Summary if no recommendations */}
+          {useMemo(() => {
+            const recommendations: Array<{
+              priority: "high" | "medium" | "low";
+              category: string;
+              title: string;
+              description: string;
+              action?: string;
+              icon: React.ReactNode;
+            }> = [];
+
+            if (volatility > 5) recommendations.push({ priority: "high", category: "Risk", title: "", description: "", icon: null });
+            if ((stats.sharpeRatio || 0) < 0) recommendations.push({ priority: "high", category: "Performance", title: "", description: "", icon: null });
+            if (assetAllocation.length === 0) recommendations.push({ priority: "high", category: "Portfolio", title: "", description: "", icon: null });
+            if (assetAllocation.length < 3) recommendations.push({ priority: "high", category: "Diversification", title: "", description: "", icon: null });
+            if (assetAllocation[0]?.percentage > 40) recommendations.push({ priority: "high", category: "Concentration", title: "", description: "", icon: null });
+            if ((stats.winRate || 0) < 40 && stats.totalTrades >= 10) recommendations.push({ priority: "high", category: "Strategy", title: "", description: "", icon: null });
+            if (maxDrawdown > 30) recommendations.push({ priority: "high", category: "Risk", title: "", description: "", icon: null });
+            if ((stats.totalPnLPercent || 0) < -10) recommendations.push({ priority: "high", category: "Performance", title: "", description: "", icon: null });
+
+            return recommendations.length === 0;
+          }, [stats, volatility, maxDrawdown, assetAllocation]) && (
+            <div className="p-4 rounded-lg border border-primary/50 bg-primary/5">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-5 w-5 text-profit" />
+                <div>
+                  <h4 className="text-sm font-semibold">Portfolio Health: Good</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your portfolio metrics are within healthy ranges. Continue monitoring and maintain your current risk management practices.
             </p>
           </div>
-
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Sharpe Ratio Analysis</h4>
-            <p className="text-sm text-muted-foreground">
-              {(stats.sharpeRatio || 0) > 1 ? (
-                "Excellent risk-adjusted returns! Your portfolio is generating good returns relative to its risk."
-              ) : (stats.sharpeRatio || 0) > 0 ? (
-                "Fair risk-adjusted returns. There may be opportunities to improve returns without increasing risk."
-              ) : (
-                "Your returns aren't compensating for the risk taken. Consider reviewing your strategy and asset selection."
-              )}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Diversification</h4>
-            <p className="text-sm text-muted-foreground">
-              {assetAllocation.length === 0 ? (
-                "Start building your portfolio by adding positions."
-              ) : assetAllocation.length < 3 ? (
-                "Consider adding more positions to improve diversification and reduce concentration risk."
-              ) : assetAllocation[0].percentage > 40 ? (
-                `Your largest position (${assetAllocation[0].symbol}) represents ${assetAllocation[0].percentage.toFixed(1)}% of your portfolio. Consider rebalancing to reduce concentration risk.`
-              ) : (
-                "Your portfolio shows good diversification across multiple holdings."
-              )}
-            </p>
-          </div>
-
-          {maxDrawdown > 20 && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-loss">Drawdown Alert</h4>
-              <p className="text-sm text-muted-foreground">
-                Your maximum drawdown of {maxDrawdown.toFixed(1)}% is significant. Consider implementing stop-loss strategies to protect capital during downturns.
-              </p>
+              </div>
             </div>
           )}
         </CardContent>
