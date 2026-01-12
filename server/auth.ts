@@ -3,7 +3,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { db } from "./db";
+import { pool } from "./db";
 import { storage } from "./storage";
 import { insertUserSchema, type User } from "@shared/schema";
 import { z } from "zod";
@@ -41,7 +41,7 @@ export function setupAuth(app: Express) {
       resave: false,
       saveUninitialized: false,
       store: new PgStore({
-        pool: db,
+        pool: pool,
         tableName: "session",
         createTableIfMissing: true,
       }),
