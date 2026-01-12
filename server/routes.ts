@@ -7,6 +7,7 @@ import { marketCache } from "./cache";
 import { BacktestEngine, TechnicalIndicators } from "./backtest";
 import { requireAdmin, requireAuth } from "./auth";
 import { setupWebSocket } from "./websocket";
+import { calculateRiskAnalytics } from "./risk-analytics";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -949,6 +950,77 @@ export async function registerRoutes(
     }
   });
 
+  // Risk Analytics endpoint
+  app.get("/api/portfolio/risk-analytics", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const holdings = await storage.getAllHoldings(user.id);
+
+      if (holdings.length === 0) {
+        return res.status(400).json({ error: "No holdings in portfolio. Add assets to analyze risk." });
+      }
+
+      // Get current prices and historical data for all holdings
+      const symbols = holdings.map(h => h.symbol);
+      const quotes = await marketCache.getMultiQuotes(symbols);
+      const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
+
+      // Fetch 3 months of historical data for returns calculation
+      const historicalDataPromises = symbols.map(symbol =>
+        marketCache.getHistory(symbol, "3mo", "1d").catch(() => [])
+      );
+      const allHistoricalData = await Promise.all(historicalDataPromises);
+
+      // Build portfolio positions with returns data
+      const positions = holdings.map((holding, index) => {
+        const history = allHistoricalData[index];
+        const historicalPrices = history.map((item: any) => item.close);
+        const returns = [];
+
+        // Calculate daily returns
+        for (let i = 1; i < historicalPrices.length; i++) {
+          if (historicalPrices[i - 1] !== 0) {
+            returns.push((historicalPrices[i] - historicalPrices[i - 1]) / historicalPrices[i - 1]);
+          }
+        }
+
+        return {
+          symbol: holding.symbol,
+          name: holding.name,
+          quantity: parseFloat(holding.quantity),
+          avgPrice: parseFloat(holding.avgPrice),
+          currentPrice: priceMap[holding.symbol] || parseFloat(holding.avgPrice),
+          returns,
+          historicalPrices,
+        };
+      });
+
+      // Optional: Get benchmark returns (SPY for US market)
+      let benchmarkReturns: number[] | undefined;
+      try {
+        const spyHistory = await marketCache.getHistory("SPY", "3mo", "1d");
+        const spyPrices = spyHistory.map((item: any) => item.close);
+        benchmarkReturns = [];
+        for (let i = 1; i < spyPrices.length; i++) {
+          if (spyPrices[i - 1] !== 0) {
+            benchmarkReturns.push((spyPrices[i] - spyPrices[i - 1]) / spyPrices[i - 1]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching benchmark data:", error);
+        // Continue without benchmark
+      }
+
+      // Calculate risk analytics
+      const riskAnalytics = await calculateRiskAnalytics(positions, benchmarkReturns);
+
+      res.json(riskAnalytics);
+    } catch (error) {
+      console.error("Error calculating risk analytics:", error);
+      res.status(500).json({ error: "Failed to calculate risk analytics" });
+    }
+  });
+
   // Admin routes
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
@@ -1219,6 +1291,160 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching alert stats:", error);
       res.status(500).json({ error: "Failed to fetch alert stats" });
+    }
+  });
+
+  // ==================== ML PREDICTION ENDPOINTS ====================
+
+  // Global predictor cache (in-memory for simplicity, can be persisted)
+  const predictorCache = new Map<string, any>();
+
+  // Train ML model for a symbol
+  app.post("/api/ml/train", requireAuth, async (req, res) => {
+    try {
+      const { symbol, range = "1y", epochs = 80 } = req.body;
+
+      if (!symbol) {
+        return res.status(400).json({ error: "Symbol is required" });
+      }
+
+      console.log(`Training ML model for ${symbol}...`);
+
+      // Dynamic import to avoid loading TensorFlow on startup
+      const { StockPredictor } = await import("./stock-predictor");
+
+      const predictor = new StockPredictor({
+        sequenceLength: 7,
+        priceChangeThreshold: 0.015
+      });
+
+      // Set timeout for training (10 minutes max)
+      const trainPromise = predictor.train(symbol, range, epochs);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Training timeout")), 600000);
+      });
+
+      const metrics = await Promise.race([trainPromise, timeoutPromise]) as any;
+
+      // Cache the trained predictor
+      predictorCache.set(symbol, predictor);
+
+      res.json({
+        success: true,
+        symbol,
+        metrics,
+        message: "Model trained successfully"
+      });
+    } catch (error: any) {
+      console.error("Error training ML model:", error);
+      res.status(500).json({ error: error.message || "Failed to train ML model" });
+    }
+  });
+
+  // Get price prediction for next N days
+  app.get("/api/ml/predict/:symbol", requireAuth, async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { days = "3" } = req.query;
+      const numDays = parseInt(days as string, 10);
+
+      if (numDays < 1 || numDays > 7) {
+        return res.status(400).json({ error: "Days must be between 1 and 7" });
+      }
+
+      // Check if model is trained for this symbol
+      let predictor = predictorCache.get(symbol);
+
+      if (!predictor) {
+        return res.status(404).json({
+          error: "Model not trained for this symbol",
+          message: `Please train the model first using POST /api/ml/train with symbol=${symbol}`
+        });
+      }
+
+      console.log(`Predicting ${numDays} days for ${symbol}...`);
+      const predictions = await predictor.predictNextDays(symbol, numDays);
+
+      res.json({
+        symbol,
+        predictions,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Error making prediction:", error);
+      res.status(500).json({ error: error.message || "Failed to make prediction" });
+    }
+  });
+
+  // Quick prediction endpoint (auto-trains if needed)
+  app.get("/api/ml/quick-predict/:symbol", requireAuth, async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { days = "3" } = req.query;
+      const numDays = parseInt(days as string, 10);
+
+      console.log(`Quick predict for ${symbol}...`);
+
+      // Check if model exists, if not, train it
+      let predictor = predictorCache.get(symbol);
+
+      if (!predictor) {
+        console.log(`No cached model for ${symbol}, training now...`);
+        const { StockPredictor } = await import("./stock-predictor");
+
+        predictor = new StockPredictor({
+          sequenceLength: 7,
+          priceChangeThreshold: 0.015
+        });
+
+        // Train with fewer epochs for speed
+        await predictor.train(symbol, "1y", 40);
+        predictorCache.set(symbol, predictor);
+      }
+
+      const predictions = await predictor.predictNextDays(symbol, numDays);
+
+      res.json({
+        symbol,
+        predictions,
+        generatedAt: new Date().toISOString(),
+        autoTrained: true
+      });
+    } catch (error: any) {
+      console.error("Error in quick predict:", error);
+      res.status(500).json({ error: error.message || "Failed to make prediction" });
+    }
+  });
+
+  // Get list of trained models
+  app.get("/api/ml/models", requireAuth, async (_req, res) => {
+    try {
+      const models = Array.from(predictorCache.keys()).map(symbol => ({
+        symbol,
+        trainedAt: new Date().toISOString() // Could be enhanced with actual timestamps
+      }));
+
+      res.json({ models });
+    } catch (error) {
+      console.error("Error fetching models:", error);
+      res.status(500).json({ error: "Failed to fetch models" });
+    }
+  });
+
+  // Clear model cache
+  app.delete("/api/ml/models/:symbol", requireAuth, async (req, res) => {
+    try {
+      const { symbol } = req.params;
+
+      if (predictorCache.has(symbol)) {
+        predictorCache.delete(symbol);
+        res.json({ success: true, message: `Model for ${symbol} removed` });
+      } else {
+        res.status(404).json({ error: "Model not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting model:", error);
+      res.status(500).json({ error: "Failed to delete model" });
     }
   });
 
