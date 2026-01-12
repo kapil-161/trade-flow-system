@@ -425,10 +425,12 @@ export class LSTMPriceModel {
 
     this.model = tf.model({ inputs: input, outputs: output });
 
-    // Use custom Huber loss matching Python implementation
+    // Use meanSquaredError as loss (robust and well-supported)
+    // Note: Custom Huber loss had compatibility issues with TensorFlow.js validation
+    // meanSquaredError works well for regression tasks and is fully supported
     this.model.compile({
       optimizer: tf.train.adamax(0.001),
-      loss: huberLoss(1.0),
+      loss: 'meanSquaredError',
       metrics: ['mae']
     });
   }
