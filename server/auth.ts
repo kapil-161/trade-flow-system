@@ -33,6 +33,26 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   });
 }
 
+// Create session table manually (connect-pg-simple SQL file isn't bundled)
+async function ensureSessionTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+      ) WITH (OIDS=FALSE);
+      
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+    `);
+    console.log("Session table created/verified successfully");
+  } catch (error) {
+    console.error("Failed to create session table:", error);
+    throw error;
+  }
+}
+
 export async function setupAuth(app: Express) {
   // Session configuration with PostgreSQL store
   const isProduction = process.env.NODE_ENV === "production";
@@ -43,10 +63,13 @@ export async function setupAuth(app: Express) {
     const client = await pool.connect();
     client.release();
     
+    // Create session table manually (connect-pg-simple's SQL file isn't bundled)
+    await ensureSessionTable();
+    
     sessionStore = new PgStore({
       pool: pool,
       tableName: "session",
-      createTableIfMissing: true,
+      createTableIfMissing: false, // We create it manually above
     });
 
     // Handle store errors gracefully
