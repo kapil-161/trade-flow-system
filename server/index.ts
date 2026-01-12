@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { setupAuth } from "./auth";
+import { ensureAdminColumn } from "./migrate";
 import { createServer } from "http";
 
 const app = express();
@@ -65,6 +66,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Ensure database schema is up to date
+  try {
+    await ensureAdminColumn();
+  } catch (error) {
+    console.error("Failed to run migrations:", error);
+    // Continue anyway - manual migration can be run if needed
+  }
+
   // Setup authentication before routes
   try {
     await setupAuth(app);

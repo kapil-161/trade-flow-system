@@ -10,6 +10,7 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
+    "migrate-admin": "tsx script/migrate-admin.ts",
     "set-admin": "tsx script/set-admin.ts"
   },
   "dependencies": {
