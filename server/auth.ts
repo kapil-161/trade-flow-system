@@ -2,12 +2,13 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import { db } from "./db";
 import { storage } from "./storage";
 import { insertUserSchema, type User } from "@shared/schema";
 import { z } from "zod";
 
-const MemoryStore = createMemoryStore(session);
+const PgStore = connectPgSimple(session);
 
 // Hash password using built-in crypto (no external dependencies)
 async function hashPassword(password: string): Promise<string> {
@@ -33,19 +34,22 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 }
 
 export function setupAuth(app: Express) {
-  // Session configuration
+  // Session configuration with PostgreSQL store
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "trade-flow-secret-key-change-in-production",
       resave: false,
       saveUninitialized: false,
-      store: new MemoryStore({
-        checkPeriod: 86400000, // prune expired entries every 24h
+      store: new PgStore({
+        pool: db,
+        tableName: "session",
+        createTableIfMissing: true,
       }),
       cookie: {
         secure: process.env.NODE_ENV === "production",
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
       },
     })
   );
