@@ -392,6 +392,17 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/holdings", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const deletedCount = await storage.deleteAllHoldings(user.id);
+      res.json({ success: true, deletedCount });
+    } catch (error) {
+      console.error("Error deleting all holdings:", error);
+      res.status(500).json({ error: "Failed to delete all holdings" });
+    }
+  });
+
   // Trades CRUD
   app.get("/api/trades", requireAuth, async (req, res) => {
     try {

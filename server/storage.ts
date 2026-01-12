@@ -31,6 +31,7 @@ export interface IStorage {
   createHolding(holding: InsertHolding & { userId: string }): Promise<Holding>;
   updateHolding(id: string, userId: string, holding: Partial<InsertHolding>): Promise<Holding | undefined>;
   deleteHolding(id: string, userId: string): Promise<void>;
+  deleteAllHoldings(userId: string): Promise<number>;
 
   // Trade methods
   getAllTrades(userId: string): Promise<Trade[]>;
@@ -121,6 +122,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteHolding(id: string, userId: string): Promise<void> {
     await db.delete(holdings).where(and(eq(holdings.id, id), eq(holdings.userId, userId)));
+  }
+
+  async deleteAllHoldings(userId: string): Promise<number> {
+    const userHoldings = await this.getAllHoldings(userId);
+    const count = userHoldings.length;
+    if (count > 0) {
+      await db.delete(holdings).where(eq(holdings.userId, userId));
+    }
+    return count;
   }
 
   // Trade methods

@@ -151,6 +151,24 @@ export function useDeleteHolding() {
   });
 }
 
+export function useDeleteAllHoldings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/holdings", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to delete all holdings");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["holdings"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-stats"] });
+    },
+  });
+}
+
 // Trades Hooks
 export function useTrades() {
   return useQuery<Trade[]>({

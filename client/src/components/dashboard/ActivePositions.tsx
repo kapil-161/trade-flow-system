@@ -1,8 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Bitcoin, CircleDollarSign, MoreVertical, Edit2, Trash2 } from "lucide-react";
-import { useHoldings, useMultiQuotes, useUpdateHolding, useDeleteHolding } from "@/lib/api";
+import { Bitcoin, CircleDollarSign, MoreVertical, Edit2, Trash2, Trash } from "lucide-react";
+import { useHoldings, useMultiQuotes, useUpdateHolding, useDeleteHolding, useDeleteAllHoldings } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
@@ -30,11 +41,13 @@ export function ActivePositions() {
   const { data: quotes = [], isLoading: quotesLoading } = useMultiQuotes(symbols);
   const updateHolding = useUpdateHolding();
   const deleteHolding = useDeleteHolding();
+  const deleteAllHoldings = useDeleteAllHoldings();
   const { toast } = useToast();
   
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
   const [editQuantity, setEditQuantity] = useState("");
   const [editAvgPrice, setEditAvgPrice] = useState("");
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   const isLoading = holdingsLoading || quotesLoading;
 
@@ -91,10 +104,57 @@ export function ActivePositions() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    try {
+      const result = await deleteAllHoldings.mutateAsync();
+      toast({ 
+        title: "All Holdings Deleted", 
+        description: `Successfully removed ${result.deletedCount || holdings.length} position(s) from your portfolio.` 
+      });
+      setShowDeleteAllDialog(false);
+    } catch (err) {
+      toast({ title: "Delete Failed", description: "Failed to delete all holdings.", variant: "destructive" });
+    }
+  };
+
   return (
     <Card className="col-span-1 lg:col-span-2 bg-card/50 backdrop-blur-md border-border/50" data-testid="card-active-positions">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-lg font-medium tracking-tight">Active Positions</CardTitle>
+        {holdings.length > 0 && (
+          <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="destructive" 
+                size="sm"
+                className="gap-2"
+                data-testid="button-delete-all-holdings"
+              >
+                <Trash className="h-4 w-4" />
+                Delete All
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete All Holdings?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all {holdings.length} position(s) from your portfolio. 
+                  This action cannot be undone. Are you sure you want to continue?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAll}
+                  disabled={deleteAllHoldings.isPending}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deleteAllHoldings.isPending ? "Deleting..." : "Delete All"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </CardHeader>
       <CardContent>
         {holdings.length === 0 ? (
