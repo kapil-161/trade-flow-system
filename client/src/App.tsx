@@ -13,6 +13,7 @@ import Backtest from "@/pages/backtest";
 import BatchAnalysis from "@/pages/batch-analysis";
 import Settings from "@/pages/settings";
 import AdminPage from "@/pages/admin";
+import SetupAdminPage from "@/pages/setup-admin";
 import LoginPage from "@/pages/login";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -72,6 +73,9 @@ function Router() {
       </Route>
       <Route path="/admin">
         {() => <ProtectedRoute component={AdminPage} />}
+      </Route>
+      <Route path="/setup-admin">
+        {() => <ProtectedRoute component={SetupAdminPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>
