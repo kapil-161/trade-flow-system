@@ -343,8 +343,9 @@ export class SequenceBuilder {
 // ================== LSTM MODEL ==================
 
 /**
- * Custom Huber loss function for TensorFlow.js
+ * Custom Huber loss function for TensorFlow.js (differentiable version)
  * Huber loss is robust to outliers, combining MSE for small errors and MAE for large errors
+ * Uses mathematical identity min(a,b) = -max(-a,-b) to ensure differentiability
  * @param delta - Threshold parameter (default: 1.0)
  */
 function huberLoss(delta: number = 1.0): (yTrue: tf.Tensor, yPred: tf.Tensor) => tf.Tensor {
@@ -352,18 +353,20 @@ function huberLoss(delta: number = 1.0): (yTrue: tf.Tensor, yPred: tf.Tensor) =>
     const error = tf.sub(yTrue, yPred);
     const absError = tf.abs(error);
     const squaredError = tf.square(error);
-    const deltaTensor = tf.scalar(delta);
     
-    // For small errors (|error| <= delta): use squared error
-    // For large errors (|error| > delta): use linear error
-    const smallError = tf.mul(tf.scalar(0.5), squaredError);
-    const largeError = tf.sub(
-      tf.mul(deltaTensor, absError),
-      tf.mul(tf.scalar(0.5), tf.square(deltaTensor))
+    // Huber loss definition:
+    // If |error| <= delta: loss = 0.5 * error^2
+    // If |error| > delta: loss = delta * |error| - 0.5 * delta^2
+    
+    const mseTerm = tf.mul(tf.scalar(0.5), squaredError);
+    const maeTerm = tf.sub(
+      tf.mul(tf.scalar(delta), absError),
+      tf.scalar(0.5 * delta * delta)
     );
     
-    const condition = tf.lessEqual(absError, deltaTensor);
-    const loss = tf.where(condition, smallError, largeError);
+    // Use min(a,b) = -max(-a,-b) for differentiability
+    // This avoids tf.where which requires non-differentiable conditionals
+    const loss = tf.neg(tf.maximum(tf.neg(mseTerm), tf.neg(maeTerm)));
     
     return tf.mean(loss);
   };
