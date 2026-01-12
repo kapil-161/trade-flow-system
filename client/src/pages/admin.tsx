@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,15 +35,60 @@ interface AdminStats {
 }
 
 export default function AdminPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading, refreshUser } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  // Redirect if not admin
-  if (!user?.isAdmin) {
-    setLocation("/");
+  // Refresh user data on mount to ensure we have latest admin status
+  useEffect(() => {
+    if (!authLoading && user) {
+      refreshUser();
+    }
+  }, []);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Redirect if not logged in
+  if (!user) {
+    setLocation("/login");
     return null;
+  }
+
+  // Show access denied message if not admin
+  if (!user.isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Access Denied</CardTitle>
+            <CardDescription>
+              You need administrator privileges to access this page.
+              {user.username && (
+                <span className="block mt-2 text-sm">
+                  Logged in as: <strong>{user.username}</strong>
+                </span>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button onClick={() => refreshUser()} variant="outline" className="w-full">
+              Refresh Status
+            </Button>
+            <Button onClick={() => setLocation("/")} className="w-full">
+              Go to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const { data: users, isLoading: usersLoading } = useQuery<AdminUser[]>({
