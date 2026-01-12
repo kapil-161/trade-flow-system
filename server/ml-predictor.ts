@@ -343,9 +343,9 @@ export class SequenceBuilder {
 // ================== LSTM MODEL ==================
 
 /**
- * Custom Huber loss function for TensorFlow.js (differentiable version)
+ * Custom Huber loss function for TensorFlow.js (smooth differentiable version)
  * Huber loss is robust to outliers, combining MSE for small errors and MAE for large errors
- * Uses mathematical identity min(a,b) = -max(-a,-b) to ensure differentiability
+ * Uses smooth approximation with only differentiable operations
  * @param delta - Threshold parameter (default: 1.0)
  */
 function huberLoss(delta: number = 1.0): (yTrue: tf.Tensor, yPred: tf.Tensor) => tf.Tensor {
@@ -354,19 +354,39 @@ function huberLoss(delta: number = 1.0): (yTrue: tf.Tensor, yPred: tf.Tensor) =>
     const absError = tf.abs(error);
     const squaredError = tf.square(error);
     
-    // Huber loss definition:
-    // If |error| <= delta: loss = 0.5 * error^2
-    // If |error| > delta: loss = delta * |error| - 0.5 * delta^2
+    // Smooth Huber loss approximation using only differentiable operations
+    // Uses smooth transition between MSE and MAE terms
+    // Formula: loss = 0.5 * error^2 * smooth_weight + (delta * |error| - 0.5 * delta^2) * (1 - smooth_weight)
+    // where smooth_weight smoothly transitions from 1 to 0 as |error| increases
     
-    const mseTerm = tf.mul(tf.scalar(0.5), squaredError);
-    const maeTerm = tf.sub(
-      tf.mul(tf.scalar(delta), absError),
-      tf.scalar(0.5 * delta * delta)
+    const deltaTensor = tf.scalar(delta);
+    const halfDeltaSq = tf.scalar(0.5 * delta * delta);
+    
+    // Smooth transition factor using sigmoid-like function
+    // When |error| << delta: weight ≈ 1 (use MSE)
+    // When |error| >> delta: weight ≈ 0 (use MAE)
+    const scaledError = tf.div(absError, deltaTensor);
+    // Use smooth approximation: weight = exp(-scaledError^2) or similar
+    // Using a smooth step: 1 / (1 + scaledError^2) gives good approximation
+    const smoothWeight = tf.div(
+      tf.scalar(1),
+      tf.add(tf.scalar(1), tf.square(scaledError))
     );
     
-    // Use min(a,b) = -max(-a,-b) for differentiability
-    // This avoids tf.where which requires non-differentiable conditionals
-    const loss = tf.neg(tf.maximum(tf.neg(mseTerm), tf.neg(maeTerm)));
+    // MSE term: 0.5 * error^2
+    const mseTerm = tf.mul(tf.scalar(0.5), squaredError);
+    
+    // MAE term: delta * |error| - 0.5 * delta^2
+    const maeTerm = tf.sub(
+      tf.mul(deltaTensor, absError),
+      halfDeltaSq
+    );
+    
+    // Smooth combination
+    const loss = tf.add(
+      tf.mul(mseTerm, smoothWeight),
+      tf.mul(maeTerm, tf.sub(tf.scalar(1), smoothWeight))
+    );
     
     return tf.mean(loss);
   };
