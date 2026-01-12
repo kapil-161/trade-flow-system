@@ -1337,7 +1337,12 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("Error training ML model:", error);
-      res.status(500).json({ error: error.message || "Failed to train ML model" });
+      console.error("Error stack:", error.stack);
+      const errorMessage = error?.message || error?.toString() || "Failed to train ML model";
+      res.status(500).json({ 
+        error: errorMessage,
+        details: process.env.NODE_ENV === "development" ? error.stack : undefined
+      });
     }
   });
 

@@ -403,36 +403,41 @@ export class LSTMPriceModel {
   }
 
   build(): void {
-    const input = tf.input({ shape: [this.sequenceLength, this.numFeatures] });
+    try {
+      const input = tf.input({ shape: [this.sequenceLength, this.numFeatures] });
 
-    // LSTM layers matching Python architecture
-    let x = tf.layers.lstm({
-      units: 16,
-      returnSequences: true,
-      dropout: 0.2,
-      recurrentDropout: 0.2
-    }).apply(input) as tf.SymbolicTensor;
+      // LSTM layers matching Python architecture
+      let x = tf.layers.lstm({
+        units: 16,
+        returnSequences: true,
+        dropout: 0.2,
+        recurrentDropout: 0.2
+      }).apply(input) as tf.SymbolicTensor;
 
-    x = tf.layers.lstm({
-      units: 8,
-      dropout: 0.2,
-      recurrentDropout: 0.2
-    }).apply(x) as tf.SymbolicTensor;
+      x = tf.layers.lstm({
+        units: 8,
+        dropout: 0.2,
+        recurrentDropout: 0.2
+      }).apply(x) as tf.SymbolicTensor;
 
-    x = tf.layers.dense({ units: 8, activation: 'relu' }).apply(x) as tf.SymbolicTensor;
-    x = tf.layers.dropout({ rate: 0.3 }).apply(x) as tf.SymbolicTensor;
-    const output = tf.layers.dense({ units: 1, activation: 'linear' }).apply(x) as tf.SymbolicTensor;
+      x = tf.layers.dense({ units: 8, activation: 'relu' }).apply(x) as tf.SymbolicTensor;
+      x = tf.layers.dropout({ rate: 0.3 }).apply(x) as tf.SymbolicTensor;
+      const output = tf.layers.dense({ units: 1, activation: 'linear' }).apply(x) as tf.SymbolicTensor;
 
-    this.model = tf.model({ inputs: input, outputs: output });
+      this.model = tf.model({ inputs: input, outputs: output });
 
-    // Use meanSquaredError as loss (robust and well-supported)
-    // Note: Custom Huber loss had compatibility issues with TensorFlow.js validation
-    // meanSquaredError works well for regression tasks and is fully supported
-    this.model.compile({
-      optimizer: tf.train.adamax(0.001),
-      loss: 'meanSquaredError',
-      metrics: ['mae']
-    });
+      // Use meanSquaredError as loss (robust and well-supported)
+      // Note: Custom Huber loss had compatibility issues with TensorFlow.js validation
+      // meanSquaredError works well for regression tasks and is fully supported
+      this.model.compile({
+        optimizer: tf.train.adamax(0.001),
+        loss: 'meanSquaredError',
+        metrics: ['mae']
+      });
+    } catch (error: any) {
+      console.error('Error building LSTM model:', error);
+      throw new Error(`Failed to build model: ${error.message || error}`);
+    }
   }
 
   async train(

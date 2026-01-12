@@ -90,6 +90,14 @@ export class StockPredictor {
     const { features, featureNames, targetPrices, targetDirections, dates } =
       FeatureEngineer.createFeatures(marketData);
 
+    if (!features || features.length === 0) {
+      throw new Error('Failed to create features from market data');
+    }
+
+    if (!features[0] || features[0].length === 0) {
+      throw new Error('Features have invalid structure');
+    }
+
     this.featureNames = featureNames;
     console.log(`   Created ${features.length} samples with ${features[0].length} features`);
 
@@ -146,10 +154,19 @@ export class StockPredictor {
 
     console.log(`   Sequences created: ${XTrainSeq.length} train, ${XTestSeq.length} test`);
 
+    if (XTrainSeq.length === 0 || XTestSeq.length === 0) {
+      throw new Error(`Insufficient sequences: train=${XTrainSeq.length}, test=${XTestSeq.length}. Need more historical data.`);
+    }
+
     // Step 6: Train LSTM price model
     console.log('\n🧠 Training LSTM Price Model...');
-    this.priceModel = new LSTMPriceModel(this.sequenceLength, features[0].length);
-    await this.priceModel.train(XTrainSeq, yPriceTrainSeq, XTestSeq, yPriceTestSeq, epochs);
+    try {
+      this.priceModel = new LSTMPriceModel(this.sequenceLength, features[0].length);
+      await this.priceModel.train(XTrainSeq, yPriceTrainSeq, XTestSeq, yPriceTestSeq, epochs);
+    } catch (error: any) {
+      console.error('Error training LSTM price model:', error);
+      throw new Error(`LSTM price model training failed: ${error.message || error}`);
+    }
 
     // Step 7: Train LSTM direction model
     console.log('\n🎯 Training LSTM Direction Model...');
