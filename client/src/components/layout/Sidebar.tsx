@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, LogOut, Menu, Activity, ArrowUpRight, ArrowDownRight, Shield } from "lucide-react";
+import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, LogOut, Menu, Activity, ArrowUpRight, ArrowDownRight, Shield, AlertTriangle, Brain } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -18,6 +18,8 @@ export function Sidebar() {
     { icon: PieChart, label: "Portfolio", href: "/portfolio" },
     { icon: History, label: "History", href: "/history" },
     { icon: Zap, label: "Backtest", href: "/backtest" },
+    { icon: AlertTriangle, label: "Risk Analytics", href: "/risk-analytics" },
+    { icon: Brain, label: "ML Prediction", href: "/ml-prediction" },
     { icon: Bell, label: "Alerts", href: "/alerts" },
     { icon: Settings, label: "Settings", href: "/settings" },
     ...(user?.isAdmin ? [{ icon: Shield, label: "Admin", href: "/admin" }] : []),

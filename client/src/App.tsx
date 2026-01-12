@@ -11,6 +11,8 @@ import History from "@/pages/history";
 import Alerts from "@/pages/alerts";
 import Backtest from "@/pages/backtest";
 import BatchAnalysis from "@/pages/batch-analysis";
+import RiskAnalytics from "@/pages/RiskAnalytics";
+import MLPrediction from "@/pages/ml-prediction";
 import Settings from "@/pages/settings";
 import AdminPage from "@/pages/admin";
 import SetupAdminPage from "@/pages/setup-admin";
@@ -75,6 +77,12 @@ function Router() {
       </Route>
       <Route path="/backtest">
         {() => <ProtectedRoute component={Backtest} />}
+      </Route>
+      <Route path="/risk-analytics">
+        {() => <ProtectedRoute component={RiskAnalytics} />}
+      </Route>
+      <Route path="/ml-prediction">
+        {() => <ProtectedRoute component={MLPrediction} />}
       </Route>
       <Route path="/settings">
         {() => <ProtectedRoute component={Settings} />}
