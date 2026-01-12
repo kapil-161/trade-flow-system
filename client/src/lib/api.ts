@@ -303,13 +303,63 @@ export interface ScannerSignalsResponse {
   scanDate: string;
 }
 
-// Portfolio Scanner Signals Hook - fetches signals for portfolio holdings
+// Portfolio Scanner Signals Hook - uses saved batch analysis results or fetches from API
 export function usePortfolioScannerSignals(symbols: string[]) {
   return useQuery<Record<string, ScannerSignal>>({
     queryKey: ["portfolio-scanner-signals", symbols.sort().join(",")], // Sort for consistent cache key
     queryFn: async () => {
       if (symbols.length === 0) return {};
       
+      // First, try to get signals from saved batch analysis results in localStorage
+      try {
+        const savedResults = localStorage.getItem("market-scanner-results");
+        if (savedResults) {
+          const parsed: {
+            results: Record<string, ScannerSignal[]>;
+            scanDate?: string;
+            scanDateDisplay?: string;
+            timestamp: number;
+          } = JSON.parse(savedResults);
+          
+          // Extract signals from "ALL" category or search through all sectors
+          const allSignals: ScannerSignal[] = parsed.results["ALL"] || [];
+          
+          // If "ALL" doesn't exist, flatten all sector results
+          if (allSignals.length === 0) {
+            Object.values(parsed.results).forEach(sectorSignals => {
+              if (Array.isArray(sectorSignals)) {
+                allSignals.push(...sectorSignals);
+              }
+            });
+          }
+          
+          // Convert to map keyed by symbol (case-insensitive)
+          const signalsMap: Record<string, ScannerSignal> = {};
+          allSignals.forEach((signal) => {
+            signalsMap[signal.symbol.toUpperCase()] = signal;
+          });
+          
+          // Only return signals for requested symbols
+          const filteredMap: Record<string, ScannerSignal> = {};
+          symbols.forEach(symbol => {
+            const upperSymbol = symbol.toUpperCase();
+            if (signalsMap[upperSymbol]) {
+              filteredMap[upperSymbol] = signalsMap[upperSymbol];
+            }
+          });
+          
+          // If we found any signals, return them (even if not all symbols have signals)
+          if (Object.keys(filteredMap).length > 0) {
+            console.log(`Using ${Object.keys(filteredMap).length} signals from saved batch analysis`);
+            return filteredMap;
+          }
+        }
+      } catch (error) {
+        console.warn("Error reading saved batch analysis results:", error);
+        // Continue to API fallback
+      }
+      
+      // Fallback to API if no saved results or if saved results don't have needed symbols
       try {
         const response = await fetch("/api/backtest/batch-scan", {
           method: "POST",

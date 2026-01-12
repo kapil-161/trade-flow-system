@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -62,6 +63,7 @@ export default function BatchAnalysis() {
   });
   const { toast } = useToast();
   const createTrade = useCreateTrade();
+  const queryClient = useQueryClient();
 
   // Load saved scanner results on mount
   useEffect(() => {
@@ -324,6 +326,9 @@ export default function BatchAnalysis() {
             : format(scanDate!, "MMM dd, yyyy");
           localStorage.setItem(STORAGE_DATE_DISPLAY_KEY, dateDisplay);
         }
+        
+        // Invalidate portfolio scanner signals cache so it picks up the new batch analysis results
+        queryClient.invalidateQueries({ queryKey: ["portfolio-scanner-signals"] });
       } catch (error) {
         console.error("Failed to save scanner results:", error);
       }
