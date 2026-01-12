@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Shield, Users, TrendingUp, History, Star, Loader2 } from "lucide-react";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 
 interface AdminUser {
   id: string;
@@ -36,12 +36,12 @@ interface AdminStats {
 export default function AdminPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   // Redirect if not admin
   if (!user?.isAdmin) {
-    navigate("/");
+    setLocation("/");
     return null;
   }
 
