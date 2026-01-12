@@ -9,10 +9,10 @@ interface CacheEntry<T> {
 class MarketDataCache {
   private cache: Map<string, CacheEntry<any>> = new Map();
 
-  // Extended TTL values (in milliseconds) - more aggressive caching to reduce API calls
-  private readonly QUOTE_TTL = 10 * 60 * 1000; // 10 minutes for real-time quotes (increased from 5min)
-  private readonly HISTORY_TTL = 2 * 60 * 60 * 1000; // 2 hours for historical data
-  private readonly BATCH_TTL = 10 * 60 * 1000; // 10 minutes for batch quotes
+  // TTL values (in milliseconds) - optimized for alert system
+  private readonly QUOTE_TTL = 1 * 60 * 1000; // 1 minute for real-time quotes (matches alert check frequency)
+  private readonly HISTORY_TTL = 2 * 60 * 60 * 1000; // 2 hours for historical data (RSI/EMA calculations)
+  private readonly BATCH_TTL = 1 * 60 * 1000; // 1 minute for batch quotes
 
   // Rate limiting - increased to avoid hitting Yahoo Finance limits
   private lastFetchTime: number = 0;

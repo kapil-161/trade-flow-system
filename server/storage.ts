@@ -1,5 +1,5 @@
-import { 
-  type User, 
+import {
+  type User,
   type InsertUser,
   type Holding,
   type InsertHolding,
@@ -9,11 +9,17 @@ import {
   type InsertWatchlist,
   type Setting,
   type InsertSetting,
+  type Alert,
+  type InsertAlert,
+  type AlertHistory,
+  type InsertAlertHistory,
   users,
   holdings,
   trades,
   watchlist,
-  settings
+  settings,
+  alerts,
+  alertHistory
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -58,6 +64,19 @@ export interface IStorage {
   getAllSettings(): Promise<Setting[]>;
   setSetting(key: string, value: string): Promise<Setting>;
   deleteSetting(key: string): Promise<void>;
+
+  // Alert methods
+  getAllAlerts(userId: string): Promise<Alert[]>;
+  getAlert(id: string, userId: string): Promise<Alert | undefined>;
+  getActiveAlerts(): Promise<Alert[]>;
+  createAlert(alert: InsertAlert & { userId: string }): Promise<Alert>;
+  updateAlert(id: string, userId: string, alert: Partial<Alert>): Promise<Alert | undefined>;
+  deleteAlert(id: string, userId: string): Promise<void>;
+
+  // Alert history methods
+  createAlertHistory(history: InsertAlertHistory): Promise<AlertHistory>;
+  getAlertHistory(alertId: string, userId: string): Promise<AlertHistory[]>;
+  getAllAlertHistory(userId: string): Promise<AlertHistory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -234,6 +253,70 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSetting(key: string): Promise<void> {
     await db.delete(settings).where(eq(settings.key, key));
+  }
+
+  // Alert methods
+  async getAllAlerts(userId: string): Promise<Alert[]> {
+    return await db
+      .select()
+      .from(alerts)
+      .where(eq(alerts.userId, userId))
+      .orderBy(desc(alerts.createdAt));
+  }
+
+  async getAlert(id: string, userId: string): Promise<Alert | undefined> {
+    const [alert] = await db
+      .select()
+      .from(alerts)
+      .where(and(eq(alerts.id, id), eq(alerts.userId, userId)));
+    return alert || undefined;
+  }
+
+  async getActiveAlerts(): Promise<Alert[]> {
+    return await db
+      .select()
+      .from(alerts)
+      .where(eq(alerts.status, "active"));
+  }
+
+  async createAlert(insertAlert: InsertAlert & { userId: string }): Promise<Alert> {
+    const [alert] = await db.insert(alerts).values(insertAlert).returning();
+    return alert;
+  }
+
+  async updateAlert(id: string, userId: string, updateData: Partial<Alert>): Promise<Alert | undefined> {
+    const [alert] = await db
+      .update(alerts)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(and(eq(alerts.id, id), eq(alerts.userId, userId)))
+      .returning();
+    return alert || undefined;
+  }
+
+  async deleteAlert(id: string, userId: string): Promise<void> {
+    await db.delete(alerts).where(and(eq(alerts.id, id), eq(alerts.userId, userId)));
+  }
+
+  // Alert history methods
+  async createAlertHistory(insertHistory: InsertAlertHistory): Promise<AlertHistory> {
+    const [history] = await db.insert(alertHistory).values(insertHistory).returning();
+    return history;
+  }
+
+  async getAlertHistory(alertId: string, userId: string): Promise<AlertHistory[]> {
+    return await db
+      .select()
+      .from(alertHistory)
+      .where(and(eq(alertHistory.alertId, alertId), eq(alertHistory.userId, userId)))
+      .orderBy(desc(alertHistory.triggeredAt));
+  }
+
+  async getAllAlertHistory(userId: string): Promise<AlertHistory[]> {
+    return await db
+      .select()
+      .from(alertHistory)
+      .where(eq(alertHistory.userId, userId))
+      .orderBy(desc(alertHistory.triggeredAt));
   }
 }
 

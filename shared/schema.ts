@@ -77,6 +77,72 @@ export const insertSettingSchema = createInsertSchema(settings).pick({
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
 
+// Alerts table - user price/condition alerts
+export const alerts = pgTable("alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+  name: text("name").notNull(), // User-friendly alert name
+  type: text("type").notNull(), // "price" | "rsi" | "ema_cross" | "volume" | "multi"
+  status: text("status").notNull().default("active"), // "active" | "triggered" | "paused"
+
+  // Condition fields (JSON-stringified for complex multi-condition alerts)
+  conditions: text("conditions").notNull(), // JSON string of alert conditions
+
+  // Notification settings
+  notifyEmail: text("notify_email").default("true").notNull(),
+  notifyBrowser: text("notify_browser").default("true").notNull(),
+
+  // Tracking
+  lastChecked: timestamp("last_checked"),
+  triggeredAt: timestamp("triggered_at"),
+  triggerCount: decimal("trigger_count", { precision: 10, scale: 0 }).default("0").notNull(),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAlertSchema = createInsertSchema(alerts).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+  lastChecked: true,
+  triggeredAt: true,
+  triggerCount: true,
+});
+
+export type Alert = typeof alerts.$inferSelect;
+export type InsertAlert = z.infer<typeof insertAlertSchema>;
+
+// Alert history table - track when alerts trigger
+export const alertHistory = pgTable("alert_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  alertId: varchar("alert_id").notNull().references(() => alerts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  symbol: text("symbol").notNull(),
+
+  // Snapshot of market data when alert triggered
+  price: decimal("price", { precision: 18, scale: 2 }),
+  rsi: decimal("rsi", { precision: 5, scale: 2 }),
+  emaFast: decimal("ema_fast", { precision: 18, scale: 2 }),
+  emaSlow: decimal("ema_slow", { precision: 18, scale: 2 }),
+  volume: decimal("volume", { precision: 18, scale: 2 }),
+
+  // Alert details at time of trigger
+  conditionsMet: text("conditions_met").notNull(), // JSON string describing which conditions were met
+
+  triggeredAt: timestamp("triggered_at").defaultNow().notNull(),
+});
+
+export const insertAlertHistorySchema = createInsertSchema(alertHistory).omit({
+  id: true,
+  triggeredAt: true,
+});
+
+export type AlertHistory = typeof alertHistory.$inferSelect;
+export type InsertAlertHistory = z.infer<typeof insertAlertHistorySchema>;
+
 // Insert schemas (userId will be set server-side from authenticated user)
 export const insertHoldingSchema = createInsertSchema(holdings).omit({
   id: true,

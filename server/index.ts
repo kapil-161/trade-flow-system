@@ -7,6 +7,8 @@ import { ensureAdminColumn } from "./migrate";
 import { migrateUserIdColumns } from "./migrate-userid";
 import { migrateResetTokenColumns } from "./migrate-reset-token";
 import { migrateSettingsTable } from "./migrate-settings";
+import { migrateAlertsTables } from "./migrate-alerts";
+import { alertChecker } from "./alert-checker";
 import { createServer } from "http";
 
 const app = express();
@@ -101,6 +103,14 @@ app.use((req, res, next) => {
           // Continue anyway - manual migration can be run if needed
         }
 
+        // Migrate alerts tables
+        try {
+          await migrateAlertsTables();
+        } catch (error) {
+          console.error("Failed to run alerts table migration:", error);
+          // Continue anyway - manual migration can be run if needed
+        }
+
   // Setup authentication before routes
   try {
     await setupAuth(app);
@@ -110,6 +120,14 @@ app.use((req, res, next) => {
   }
 
   await registerRoutes(httpServer, app);
+
+  // Start alert checker background job
+  try {
+    alertChecker.start();
+    log("Alert checker started successfully", "alerts");
+  } catch (error) {
+    console.error("Failed to start alert checker:", error);
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

@@ -323,3 +323,112 @@ SMTP Settings:
     throw error;
   }
 }
+
+export async function sendAlertEmail(params: {
+  to: string;
+  alertName: string;
+  symbol: string;
+  price: number;
+  conditionsMet: string[];
+  triggeredAt: Date;
+}): Promise<boolean> {
+  const mailTransporter = await getTransporter();
+
+  if (!mailTransporter) {
+    console.error("Cannot send alert email: SMTP not configured");
+    return false;
+  }
+
+  const emailConfig = await getEmailConfig();
+  const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:5000";
+
+  const conditionsHtml = params.conditionsMet
+    .map(condition => `<li style="margin: 10px 0;">${condition}</li>`)
+    .join("");
+
+  const mailOptions = {
+    from: `"Trade Flow System Alerts" <${emailConfig.auth.user}>`,
+    to: params.to,
+    subject: `🚨 Alert Triggered: ${params.alertName} (${params.symbol})`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+            .alert-box { background: #fff; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 5px; }
+            .price { font-size: 32px; font-weight: bold; color: #f59e0b; margin: 10px 0; }
+            .conditions { background: #fef3c7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background: #f59e0b; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .button:hover { background: #d97706; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+            .timestamp { color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🚨 Alert Triggered!</h1>
+            </div>
+            <div class="content">
+              <div class="alert-box">
+                <h2 style="margin-top: 0;">${params.alertName}</h2>
+                <p style="font-size: 18px; margin: 10px 0;"><strong>Symbol:</strong> ${params.symbol}</p>
+                <p style="margin: 10px 0;"><strong>Current Price:</strong></p>
+                <div class="price">$${params.price.toFixed(2)}</div>
+                <p class="timestamp">Triggered at: ${params.triggeredAt.toLocaleString()}</p>
+              </div>
+
+              <div class="conditions">
+                <h3 style="margin-top: 0;">✅ Conditions Met:</h3>
+                <ul style="margin: 10px 0; padding-left: 25px;">
+                  ${conditionsHtml}
+                </ul>
+              </div>
+
+              <div style="text-align: center;">
+                <a href="${appUrl}/alerts" class="button">View Alert Dashboard</a>
+              </div>
+
+              <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                <strong>Note:</strong> This is an automated alert from Trade Flow System.
+                Please review the market conditions and make informed trading decisions.
+              </p>
+            </div>
+            <div class="footer">
+              <p>This is an automated alert from Trade Flow System. You can manage your alerts in the dashboard.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `
+🚨 Alert Triggered: ${params.alertName}
+
+Symbol: ${params.symbol}
+Current Price: $${params.price.toFixed(2)}
+Triggered at: ${params.triggeredAt.toLocaleString()}
+
+Conditions Met:
+${params.conditionsMet.map(c => `- ${c}`).join("\n")}
+
+View your alerts: ${appUrl}/alerts
+
+---
+This is an automated alert from Trade Flow System.
+    `,
+  };
+
+  try {
+    await mailTransporter.sendMail(mailOptions);
+    console.log(`✓ Alert email sent to ${params.to} for ${params.symbol}`);
+    return true;
+  } catch (error) {
+    console.error("Error sending alert email:", error);
+    return false;
+  }
+}

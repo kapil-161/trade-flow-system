@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema } from "@shared/schema";
+import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema, insertAlertSchema } from "@shared/schema";
 import { z } from "zod";
 import { marketCache } from "./cache";
 import { BacktestEngine, TechnicalIndicators } from "./backtest";
@@ -1090,7 +1090,7 @@ export async function registerRoutes(
       }
 
       const { sendTestEmail } = await import("./email");
-      
+
       // Set a timeout for the entire operation (35 seconds)
       const sendPromise = sendTestEmail(email);
       const timeoutPromise = new Promise((_, reject) => {
@@ -1105,6 +1105,120 @@ export async function registerRoutes(
       // Ensure we always return JSON, even on error
       const errorMessage = error?.message || "Failed to send test email";
       res.status(500).json({ error: errorMessage });
+    }
+  });
+
+  // Alert endpoints
+  app.get("/api/alerts", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alerts = await storage.getAllAlerts(user.id);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching alerts:", error);
+      res.status(500).json({ error: "Failed to fetch alerts" });
+    }
+  });
+
+  app.post("/api/alerts", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const validatedData = insertAlertSchema.parse(req.body);
+      const alert = await storage.createAlert({ ...validatedData, userId: user.id });
+      res.status(201).json(alert);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating alert:", error);
+      res.status(500).json({ error: "Failed to create alert" });
+    }
+  });
+
+  app.patch("/api/alerts/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user as any;
+      const alert = await storage.updateAlert(id, user.id, req.body);
+
+      if (!alert) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+
+      res.json(alert);
+    } catch (error) {
+      console.error("Error updating alert:", error);
+      res.status(500).json({ error: "Failed to update alert" });
+    }
+  });
+
+  app.delete("/api/alerts/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user as any;
+      await storage.deleteAlert(id, user.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting alert:", error);
+      res.status(500).json({ error: "Failed to delete alert" });
+    }
+  });
+
+  // Alert history endpoints
+  app.get("/api/alerts/:id/history", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user as any;
+      const history = await storage.getAlertHistory(id, user.id);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching alert history:", error);
+      res.status(500).json({ error: "Failed to fetch alert history" });
+    }
+  });
+
+  app.get("/api/alert-history", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const history = await storage.getAllAlertHistory(user.id);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching alert history:", error);
+      res.status(500).json({ error: "Failed to fetch alert history" });
+    }
+  });
+
+  // Alert statistics endpoint
+  app.get("/api/alerts/stats", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const alerts = await storage.getAllAlerts(user.id);
+      const history = await storage.getAllAlertHistory(user.id);
+
+      const activeAlerts = alerts.filter(a => a.status === "active");
+      const uniqueSymbols = new Set(alerts.map(a => a.symbol));
+
+      // Count triggered today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const triggeredToday = history.filter(h => {
+        const triggerDate = new Date(h.triggeredAt);
+        return triggerDate >= today;
+      });
+
+      res.json({
+        activeAlerts: activeAlerts.length,
+        totalAlerts: alerts.length,
+        watchingSymbols: uniqueSymbols.size,
+        triggeredToday: triggeredToday.length,
+        lastTriggered: history[0] ? {
+          symbol: history[0].symbol,
+          triggeredAt: history[0].triggeredAt,
+        } : null,
+      });
+    } catch (error) {
+      console.error("Error fetching alert stats:", error);
+      res.status(500).json({ error: "Failed to fetch alert stats" });
     }
   });
 
