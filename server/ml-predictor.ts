@@ -538,10 +538,10 @@ export class LSTMDirectionModel {
       this.model = tf.model({ inputs: input, outputs: output });
 
       // Categorical crossentropy for classification
-      // Using tf.losses.categoricalCrossentropy function directly to avoid string validation issues
+      // Using string identifier for compatibility with TensorFlow.js
       this.model.compile({
         optimizer: tf.train.adamax(0.001),
-        loss: tf.losses.categoricalCrossentropy,
+        loss: 'categoricalCrossentropy',
         metrics: ['accuracy']
       });
     } catch (error: any) {
