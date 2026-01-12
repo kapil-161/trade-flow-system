@@ -5,3 +5,9 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .cache
+.local/
+*.log
+*.tmp
+*.swp
+*.swo
+*~

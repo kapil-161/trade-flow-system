@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -32,6 +32,18 @@ interface AnalysisResult {
 type SortColumn = "symbol" | "signal" | "price" | "rsi" | "rsiDivergence" | "volumeDivergence" | "score" | "trend";
 type SortDirection = "asc" | "desc" | null;
 
+const STORAGE_KEY = "market-scanner-results";
+const STORAGE_CONFIG_KEY = "market-scanner-config";
+const STORAGE_DATE_KEY = "market-scanner-date";
+const STORAGE_DATE_DISPLAY_KEY = "market-scanner-date-display";
+
+interface StoredScannerData {
+  results: Record<string, AnalysisResult[]>;
+  scanDate?: string;
+  scanDateDisplay?: string;
+  timestamp: number;
+}
+
 export default function BatchAnalysis() {
   const [results, setResults] = useState<Record<string, AnalysisResult[]>>({});
   const [isScanning, setIsScanning] = useState(false);
@@ -40,6 +52,7 @@ export default function BatchAnalysis() {
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [scanDate, setScanDate] = useState<Date | undefined>(undefined);
   const [scanDateDisplay, setScanDateDisplay] = useState<string>("");
+  const [lastScanTimestamp, setLastScanTimestamp] = useState<number | null>(null);
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>({
     emaFast: 21,
     emaSlow: 50,
@@ -49,6 +62,77 @@ export default function BatchAnalysis() {
   });
   const { toast } = useToast();
   const createTrade = useCreateTrade();
+
+  // Load saved scanner results on mount
+  useEffect(() => {
+    try {
+      const savedResults = localStorage.getItem(STORAGE_KEY);
+      const savedConfig = localStorage.getItem(STORAGE_CONFIG_KEY);
+      const savedDate = localStorage.getItem(STORAGE_DATE_KEY);
+      const savedDateDisplay = localStorage.getItem(STORAGE_DATE_DISPLAY_KEY);
+
+      if (savedResults) {
+        const parsed: StoredScannerData = JSON.parse(savedResults);
+        setResults(parsed.results);
+        if (parsed.scanDateDisplay) {
+          setScanDateDisplay(parsed.scanDateDisplay);
+        }
+        if (parsed.scanDate) {
+          setScanDate(new Date(parsed.scanDate));
+        }
+        if (parsed.timestamp) {
+          setLastScanTimestamp(parsed.timestamp);
+        }
+      }
+
+      if (savedDateDisplay) {
+        setScanDateDisplay(savedDateDisplay);
+      }
+
+      if (savedDate) {
+        setScanDate(new Date(savedDate));
+      }
+
+      if (savedConfig) {
+        const parsedConfig = JSON.parse(savedConfig);
+        setStrategyConfig(parsedConfig);
+      }
+    } catch (error) {
+      console.error("Failed to load saved scanner results:", error);
+    }
+  }, []);
+
+  // Save results to localStorage whenever they change
+  useEffect(() => {
+    if (Object.keys(results).length > 0) {
+      try {
+        const dataToStore: StoredScannerData = {
+          results,
+          scanDate: scanDate?.toISOString(),
+          scanDateDisplay,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToStore));
+        if (scanDate) {
+          localStorage.setItem(STORAGE_DATE_KEY, scanDate.toISOString());
+        }
+        if (scanDateDisplay) {
+          localStorage.setItem(STORAGE_DATE_DISPLAY_KEY, scanDateDisplay);
+        }
+      } catch (error) {
+        console.error("Failed to save scanner results:", error);
+      }
+    }
+  }, [results, scanDate, scanDateDisplay]);
+
+  // Save strategy config when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(strategyConfig));
+    } catch (error) {
+      console.error("Failed to save strategy config:", error);
+    }
+  }, [strategyConfig]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -168,7 +252,8 @@ export default function BatchAnalysis() {
 
   const runAnalysis = async () => {
     setIsScanning(true);
-    setResults({});
+    // Don't clear results immediately - keep showing old results while loading
+    // setResults({}); // Removed - keep old results visible during scan
 
     try {
       // Remove duplicates by using a Set
@@ -215,15 +300,43 @@ export default function BatchAnalysis() {
 
       setResults(grouped);
 
+      // Save to localStorage (will be handled by useEffect, but save immediately for consistency)
+      try {
+        const timestamp = Date.now();
+        const dataToStore: StoredScannerData = {
+          results: grouped,
+          scanDate: scanDate?.toISOString(),
+          scanDateDisplay: responseData.scanDate 
+            ? format(new Date(responseData.scanDate), "MMM dd, yyyy")
+            : scanDate 
+            ? format(scanDate, "MMM dd, yyyy")
+            : "",
+          timestamp,
+        };
+        setLastScanTimestamp(timestamp);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToStore));
+        if (scanDate) {
+          localStorage.setItem(STORAGE_DATE_KEY, scanDate.toISOString());
+        }
+        if (responseData.scanDate || scanDate) {
+          const dateDisplay = responseData.scanDate 
+            ? format(new Date(responseData.scanDate), "MMM dd, yyyy")
+            : format(scanDate!, "MMM dd, yyyy");
+          localStorage.setItem(STORAGE_DATE_DISPLAY_KEY, dateDisplay);
+        }
+      } catch (error) {
+        console.error("Failed to save scanner results:", error);
+      }
+
       const dateText = scanDate ? ` for ${format(scanDate, "MMM dd, yyyy")}` : "";
       toast({
         title: "Scan Complete",
-        description: `Analyzed ${data.length} assets across all sectors${dateText}.`,
+        description: `Analyzed ${data.length} assets across all sectors${dateText}. Results saved.`,
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to run batch analysis",
+        title: "Scan Failed",
+        description: "Failed to run market scan. Previous results are still available.",
         variant: "destructive",
       });
     } finally {
@@ -242,6 +355,11 @@ export default function BatchAnalysis() {
               {scanDateDisplay && (
                 <span className="ml-2 text-sm text-muted-foreground/80">
                   (Scan date: {scanDateDisplay})
+                </span>
+              )}
+              {lastScanTimestamp && Object.keys(results).length > 0 && (
+                <span className="ml-2 text-xs text-muted-foreground/60">
+                  • Last scan: {format(new Date(lastScanTimestamp), "MMM dd, yyyy 'at' h:mm a")}
                 </span>
               )}
             </p>
