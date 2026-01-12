@@ -432,9 +432,10 @@ export class LSTMPriceModel {
       // Use meanSquaredError as loss (robust and well-supported)
       // Note: Custom Huber loss had compatibility issues with TensorFlow.js validation
       // meanSquaredError works well for regression tasks and is fully supported
+      // Using tf.losses.meanSquaredError function directly to avoid string validation issues
       this.model.compile({
         optimizer: tf.train.adamax(0.001),
-        loss: 'meanSquaredError',
+        loss: tf.losses.meanSquaredError,
         metrics: ['mae']
       });
     } catch (error: any) {
@@ -537,9 +538,10 @@ export class LSTMDirectionModel {
       this.model = tf.model({ inputs: input, outputs: output });
 
       // Categorical crossentropy for classification
+      // Using tf.losses.categoricalCrossentropy function directly to avoid string validation issues
       this.model.compile({
         optimizer: tf.train.adamax(0.001),
-        loss: 'categoricalCrossentropy',
+        loss: tf.losses.categoricalCrossentropy,
         metrics: ['accuracy']
       });
     } catch (error: any) {
