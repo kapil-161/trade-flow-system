@@ -34,27 +34,38 @@ export interface TrainingMetrics {
 }
 
 export class StockPredictor {
-  private priceModel: LSTMPriceModel | null = null;
-  private directionModel: LSTMDirectionModel | null = null;
-  private gbModel: GradientBoostingRegressor | null = null;
-  private metaModel: GradientBoostingRegressor | null = null;
+  public priceModel: LSTMPriceModel | null = null;
+  public directionModel: LSTMDirectionModel | null = null;
+  public gbModel: GradientBoostingRegressor | null = null;
+  public metaModel: GradientBoostingRegressor | null = null;
 
-  private featureScaler: RobustScaler = new RobustScaler();
-  private targetScaler: MinMaxScaler = new MinMaxScaler();
+  public featureScaler: RobustScaler = new RobustScaler();
+  public targetScaler: MinMaxScaler = new MinMaxScaler();
 
-  private sequenceLength: number = 7;
-  private priceChangeThreshold: number = 0.015;
-  private featureNames: string[] = [];
+  public sequenceLength: number = 7;
+  public priceChangeThreshold: number = 0.015;
+  public featureNames: string[] = [];
+  private logger?: (message: string, type?: 'info' | 'success' | 'error' | 'progress') => void;
 
-  private lastData: MarketData[] = [];
-  private lastFeatures: number[][] = [];
+  public lastData: MarketData[] = [];
+  public lastFeatures: number[][] = [];
 
   constructor(options?: {
     sequenceLength?: number;
     priceChangeThreshold?: number;
+    logger?: (message: string, type?: 'info' | 'success' | 'error' | 'progress') => void;
   }) {
     if (options?.sequenceLength) this.sequenceLength = options.sequenceLength;
     if (options?.priceChangeThreshold) this.priceChangeThreshold = options.priceChangeThreshold;
+    if (options?.logger) this.logger = options.logger;
+  }
+
+  private log(message: string, type: 'info' | 'success' | 'error' | 'progress' = 'info') {
+    if (this.logger) {
+      this.logger(message, type);
+    } else {
+      console.log(message);
+    }
   }
 
   /**
@@ -65,22 +76,22 @@ export class StockPredictor {
     range: string = '1y',
     epochs: number = 80
   ): Promise<TrainingMetrics> {
-    console.log(`\n🚀 Training ML Predictor for ${symbol}`);
-    console.log('='.repeat(60));
+    this.log(`\n🚀 Training ML Predictor for ${symbol}`, 'info');
+    this.log('='.repeat(60), 'info');
 
     // Initialize TensorFlow.js backend
     try {
       const tf = await import('@tensorflow/tfjs-node');
       // Ensure TensorFlow is ready
       await tf.ready();
-      console.log('✓ TensorFlow.js initialized');
+      this.log('✓ TensorFlow.js initialized', 'success');
     } catch (error: any) {
-      console.error('Failed to initialize TensorFlow.js:', error);
+      this.log(`Failed to initialize TensorFlow.js: ${error.message || error}`, 'error');
       throw new Error(`TensorFlow.js initialization failed: ${error.message || error}`);
     }
 
     // Step 1: Fetch historical data
-    console.log('📊 Fetching historical data...');
+    this.log('📊 Fetching historical data...', 'info');
     const history = await marketCache.getHistory(symbol, range, '1d');
 
     if (history.length < 200) {
@@ -97,7 +108,7 @@ export class StockPredictor {
     }));
 
     // Step 2: Feature engineering
-    console.log('🔧 Engineering features...');
+    this.log('🔧 Engineering features...', 'info');
     const { features, featureNames, targetPrices, targetDirections, dates } =
       FeatureEngineer.createFeatures(marketData);
 
@@ -110,7 +121,7 @@ export class StockPredictor {
     }
 
     this.featureNames = featureNames;
-    console.log(`   Created ${features.length} samples with ${features[0].length} features`);
+    this.log(`   Created ${features.length} samples with ${features[0].length} features`, 'info');
 
     // Store last data for future predictions
     this.lastData = marketData;
@@ -125,10 +136,10 @@ export class StockPredictor {
     const yDirTrain = targetDirections.slice(0, splitIdx);
     const yDirTest = targetDirections.slice(splitIdx);
 
-    console.log(`   Train: ${XTrainRaw.length}, Test: ${XTestRaw.length}`);
+    this.log(`   Train: ${XTrainRaw.length}, Test: ${XTestRaw.length}`, 'info');
 
     // Step 4: Scale features
-    console.log('⚖️  Scaling features...');
+    this.log('⚖️  Scaling features...', 'info');
     const XTrainScaled = this.featureScaler.fitTransform(XTrainRaw);
     const XTestScaled = this.featureScaler.transform(XTestRaw);
 
@@ -141,7 +152,7 @@ export class StockPredictor {
     ).map(row => row[0]);
 
     // Step 5: Create sequences for LSTM
-    console.log('🔄 Creating time sequences...');
+    this.log('🔄 Creating time sequences...', 'info');
     const { X: XTrainSeq, y: yPriceTrainSeq } = SequenceBuilder.createPriceSequences(
       XTrainScaled,
       yPriceTrainScaled,
@@ -163,16 +174,16 @@ export class StockPredictor {
       this.sequenceLength
     );
 
-    console.log(`   Sequences created: ${XTrainSeq.length} train, ${XTestSeq.length} test`);
+    this.log(`   Sequences created: ${XTrainSeq.length} train, ${XTestSeq.length} test`, 'info');
 
     if (XTrainSeq.length === 0 || XTestSeq.length === 0) {
       throw new Error(`Insufficient sequences: train=${XTrainSeq.length}, test=${XTestSeq.length}. Need more historical data.`);
     }
 
     // Step 6: Train LSTM price model
-    console.log('\n🧠 Training LSTM Price Model...');
+    this.log('\n🧠 Training LSTM Price Model...', 'info');
     try {
-      this.priceModel = new LSTMPriceModel(this.sequenceLength, features[0].length);
+      this.priceModel = new LSTMPriceModel(this.sequenceLength, features[0].length, this.logger);
       await this.priceModel.train(XTrainSeq, yPriceTrainSeq, XTestSeq, yPriceTestSeq, epochs);
     } catch (error: any) {
       console.error('Error training LSTM price model:', error);
@@ -180,8 +191,8 @@ export class StockPredictor {
     }
 
     // Step 7: Train LSTM direction model (fewer epochs needed for classification)
-    console.log('\n🎯 Training LSTM Direction Model...');
-    this.directionModel = new LSTMDirectionModel(this.sequenceLength, features[0].length);
+    this.log('\n🎯 Training LSTM Direction Model...', 'info');
+    this.directionModel = new LSTMDirectionModel(this.sequenceLength, features[0].length, this.logger);
     await this.directionModel.train(
       XTrainSeqDir,
       yDirTrainSeq,
@@ -191,7 +202,7 @@ export class StockPredictor {
     );
 
     // Step 8: Train Gradient Boosting model (flattened features)
-    console.log('\n🌳 Training Gradient Boosting Model...');
+    this.log('\n🌳 Training Gradient Boosting Model...', 'info');
     const XTrainFlat = XTrainScaled.slice(this.sequenceLength); // Match LSTM length
     const yTrainFlat = yPriceTrainScaled.slice(this.sequenceLength);
 
@@ -203,7 +214,7 @@ export class StockPredictor {
     this.gbModel.fit(XTrainFlat, yTrainFlat);
 
     // Step 9: Train meta-model (stacking ensemble)
-    console.log('\n🔗 Training Stacking Ensemble...');
+    this.log('\n🔗 Training Stacking Ensemble...', 'info');
     const lstmPredsTrain = this.priceModel.predict(XTrainSeq);
     const gbPredsTrain = this.gbModel.predict(XTrainFlat);
 
@@ -216,11 +227,11 @@ export class StockPredictor {
     this.metaModel.fit(stackedTrain, yTrainFlat);
 
     // Step 10: Evaluate on test set
-    console.log('\n📈 Evaluating Model Performance...');
+    this.log('\n📈 Evaluating Model Performance...', 'info');
     const metrics = this.evaluate(XTestSeq, XTestSeqDir, yPriceTestSeq, yDirTestSeq, yPriceTest);
 
-    console.log('\n✅ Training Complete!');
-    console.log('='.repeat(60));
+    this.log('\n✅ Training Complete!', 'success');
+    this.log('='.repeat(60), 'info');
 
     return metrics;
   }
@@ -286,13 +297,13 @@ export class StockPredictor {
       (priceDirections.filter((pred, i) => pred === actualDirections[i]).length /
         priceDirections.length) * 100;
 
-    console.log('\n📊 Performance Metrics:');
-    console.log(`   R² Score: ${r2.toFixed(4)}`);
-    console.log(`   RMSE: $${rmse.toFixed(2)}`);
-    console.log(`   MAE: $${mae.toFixed(2)}`);
-    console.log(`   MAPE: ${mape.toFixed(2)}%`);
-    console.log(`   Direction Accuracy: ${dirAccuracy.toFixed(2)}%`);
-    console.log(`   Price Direction Accuracy: ${priceDirectionAccuracy.toFixed(2)}%`);
+    this.log('\n📊 Performance Metrics:', 'info');
+    this.log(`   R² Score: ${r2.toFixed(4)}`, 'info');
+    this.log(`   RMSE: $${rmse.toFixed(2)}`, 'info');
+    this.log(`   MAE: $${mae.toFixed(2)}`, 'info');
+    this.log(`   MAPE: ${mape.toFixed(2)}%`, 'info');
+    this.log(`   Direction Accuracy: ${dirAccuracy.toFixed(2)}%`, 'info');
+    this.log(`   Price Direction Accuracy: ${priceDirectionAccuracy.toFixed(2)}%`, 'info');
 
     return { r2, rmse, mae, mape, directionAccuracy: dirAccuracy, priceDirectionAccuracy };
   }

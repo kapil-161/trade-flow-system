@@ -6,6 +6,7 @@ vite.config.ts.*
 *.tar.gz
 .cache
 .local/
+.models
 *.log
 *.tmp
 *.swp

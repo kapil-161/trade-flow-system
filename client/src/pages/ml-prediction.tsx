@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Brain, TrendingUp, TrendingDown, Minus, Loader2, Trash2, RefreshCw, BarChart3, Zap } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Brain, TrendingUp, TrendingDown, Minus, Loader2, Trash2, RefreshCw, BarChart3, Zap, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -50,15 +51,79 @@ export default function MLPredictionPage() {
 
   const [predictSymbol, setPredictSymbol] = useState("");
   const [predictDays, setPredictDays] = useState("3");
+  const [trainingLogs, setTrainingLogs] = useState<Array<{ message: string; type: string; timestamp: string }>>([]);
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingSymbol, setTrainingSymbol] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch trained models
   const { data: models, isLoading: modelsLoading } = useQuery<{ models: ModelInfo[] }>({
     queryKey: ["/api/ml/models"],
   });
 
+  // Setup WebSocket for training logs
+  useEffect(() => {
+    if (!isTraining || !trainingSymbol) {
+      return;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    
+    wsRef.current = new WebSocket(wsUrl);
+    
+    wsRef.current.onopen = () => {
+      console.log("WebSocket connected for training logs");
+    };
+    
+    wsRef.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "training_log" && data.symbol === trainingSymbol) {
+          setTrainingLogs(prev => [...prev, {
+            message: data.message,
+            type: data.logType || 'info',
+            timestamp: data.timestamp || new Date().toISOString()
+          }]);
+          // Auto-scroll to bottom
+          setTimeout(() => {
+            logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    wsRef.current.onclose = () => {
+      console.log("WebSocket disconnected");
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [isTraining, trainingSymbol]);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [trainingLogs]);
+
   // Train model mutation
   const trainMutation = useMutation({
     mutationFn: async (data: { symbol: string; range: string; epochs: number }) => {
+      setIsTraining(true);
+      setTrainingSymbol(data.symbol.toUpperCase());
+      setTrainingLogs([]);
+      
       const res = await fetch("/api/ml/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,6 +147,8 @@ export default function MLPredictionPage() {
       return res.json();
     },
     onSuccess: (data) => {
+      setIsTraining(false);
+      setTrainingSymbol(null);
       toast({
         title: "Training Complete!",
         description: `Model for ${data.symbol} trained successfully. R²: ${data.metrics.r2.toFixed(4)}`,
@@ -90,6 +157,8 @@ export default function MLPredictionPage() {
       setTrainSymbol("");
     },
     onError: (error: Error) => {
+      setIsTraining(false);
+      setTrainingSymbol(null);
       console.error("Training error:", error);
       toast({
         title: "Training Failed",
@@ -482,6 +551,53 @@ export default function MLPredictionPage() {
                     </>
                   )}
                 </Button>
+
+                {/* Training Logs Panel */}
+                {isTraining && (
+                  <Card className="mt-4">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">Training Logs - {trainingSymbol}</CardTitle>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIsTraining(false);
+                            setTrainingSymbol(null);
+                            setTrainingLogs([]);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-muted/30">
+                        <div className="space-y-1 font-mono text-sm">
+                          {trainingLogs.length === 0 ? (
+                            <p className="text-muted-foreground">Waiting for training logs...</p>
+                          ) : (
+                            trainingLogs.map((log, idx) => (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  "py-1 px-2 rounded",
+                                  log.type === 'error' && "text-destructive bg-destructive/10",
+                                  log.type === 'success' && "text-green-600 bg-green-600/10",
+                                  log.type === 'progress' && "text-blue-600 bg-blue-600/10",
+                                  log.type === 'info' && "text-foreground"
+                                )}
+                              >
+                                {log.message}
+                              </div>
+                            ))
+                          )}
+                          <div ref={logsEndRef} />
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Training Results */}
                 {trainMutation.data && (

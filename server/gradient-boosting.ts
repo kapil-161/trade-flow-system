@@ -11,12 +11,12 @@ interface DecisionTree {
 }
 
 export class GradientBoostingRegressor {
-  private trees: DecisionTree[] = [];
-  private learningRate: number;
-  private nEstimators: number;
-  private maxDepth: number;
+  public trees: DecisionTree[] = [];
+  public learningRate: number;
+  public nEstimators: number;
+  public maxDepth: number;
   private minSamplesSplit: number;
-  private initialPrediction: number = 0;
+  public initialPrediction: number = 0;
 
   constructor(options: {
     nEstimators?: number;

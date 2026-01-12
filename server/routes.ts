@@ -8,13 +8,14 @@ import { BacktestEngine, TechnicalIndicators } from "./backtest";
 import { requireAdmin, requireAuth } from "./auth";
 import { setupWebSocket } from "./websocket";
 import { calculateRiskAnalytics } from "./risk-analytics";
+import { modelStorage } from "./model-storage";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   // Setup WebSocket for real-time market data
-  setupWebSocket(httpServer);
+  const wsInstance = setupWebSocket(httpServer);
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
     try {
@@ -1296,10 +1297,32 @@ export async function registerRoutes(
 
   // ==================== ML PREDICTION ENDPOINTS ====================
 
-  // Global predictor cache (in-memory for simplicity, can be persisted)
+  // Global predictor cache (in-memory, backed by persistent storage)
   const predictorCache = new Map<string, any>();
   // Training lock to prevent concurrent training for the same symbol
   const trainingLocks = new Map<string, Promise<any>>();
+
+  // Initialize model storage
+  await modelStorage.init();
+  
+  // Load all saved models on startup
+  const savedModels = await modelStorage.listModels();
+  console.log(`[model-storage] Loading ${savedModels.length} saved models...`);
+  for (const modelMeta of savedModels) {
+    try {
+      const predictor = await modelStorage.loadModel(modelMeta.symbol);
+      if (predictor) {
+        predictorCache.set(modelMeta.symbol, {
+          predictor,
+          trainedAt: modelMeta.trainedAt,
+          metrics: modelMeta.metrics
+        });
+        console.log(`[model-storage] Loaded model for ${modelMeta.symbol}`);
+      }
+    } catch (error) {
+      console.error(`[model-storage] Failed to load model for ${modelMeta.symbol}:`, error);
+    }
+  }
 
   // Test TensorFlow.js initialization (no auth required for testing)
   app.get("/api/ml/test", async (req, res) => {
@@ -1348,28 +1371,56 @@ export async function registerRoutes(
         });
       }
 
-      // Check if model already exists and is recent (within 24 hours)
+      // Check if model already exists (persistent storage, no time limit)
       const existingPredictor = predictorCache.get(symbolUpper);
-      if (existingPredictor && existingPredictor.trainedAt) {
-        const hoursSinceTraining = (Date.now() - new Date(existingPredictor.trainedAt).getTime()) / (1000 * 60 * 60);
-        if (hoursSinceTraining < 24) {
+      if (existingPredictor) {
+        return res.status(200).json({
+          success: true,
+          symbol: symbolUpper,
+          message: `Model for ${symbolUpper} already exists. Use existing model or delete it first to retrain.`,
+          cached: true,
+          trainedAt: existingPredictor.trainedAt
+        });
+      }
+
+      // Also check disk storage
+      if (await modelStorage.modelExists(symbolUpper)) {
+        // Load from disk if not in memory
+        const predictor = await modelStorage.loadModel(symbolUpper);
+        if (predictor) {
+          const metadata = await modelStorage.listModels();
+          const modelMeta = metadata.find(m => m.symbol === symbolUpper);
+          predictorCache.set(symbolUpper, {
+            predictor,
+            trainedAt: modelMeta?.trainedAt || new Date().toISOString(),
+            metrics: modelMeta?.metrics
+          });
           return res.status(200).json({
             success: true,
             symbol: symbolUpper,
-            message: `Model was trained ${hoursSinceTraining.toFixed(1)} hours ago. Use existing model or wait 24h to retrain.`,
-            cached: true
+            message: `Model for ${symbolUpper} already exists. Use existing model or delete it first to retrain.`,
+            cached: true,
+            trainedAt: modelMeta?.trainedAt
           });
         }
       }
 
       console.log(`🚀 Training ML model for ${symbolUpper}...`);
+      wsInstance.broadcastTrainingLog(symbolUpper, `🚀 Starting training for ${symbolUpper}...`, 'info');
 
       // Dynamic import to avoid loading TensorFlow on startup
       const { StockPredictor } = await import("./stock-predictor");
 
+      // Create logger function to broadcast logs via WebSocket
+      const trainingLogger = (message: string, type: 'info' | 'success' | 'error' | 'progress' = 'info') => {
+        console.log(message);
+        wsInstance.broadcastTrainingLog(symbolUpper, message, type);
+      };
+
       const predictor = new StockPredictor({
         sequenceLength: 7,
-        priceChangeThreshold: 0.015
+        priceChangeThreshold: 0.015,
+        logger: trainingLogger
       });
 
       // Create training promise and add to lock
@@ -1385,11 +1436,19 @@ export async function registerRoutes(
             timeoutPromise
           ]) as any;
 
+          // Save model to persistent storage
+          await modelStorage.saveModel(symbolUpper, predictor, metrics);
+
           // Cache the trained predictor with timestamp
           predictorCache.set(symbolUpper, {
             predictor,
-            trainedAt: new Date().toISOString()
+            trainedAt: new Date().toISOString(),
+            metrics
           });
+
+          wsInstance.broadcastTrainingLog(symbolUpper, `✅ Training completed successfully!`, 'success');
+          wsInstance.broadcastTrainingLog(symbolUpper, `📊 R² Score: ${metrics.r2.toFixed(4)}, RMSE: $${metrics.rmse.toFixed(2)}`, 'info');
+          wsInstance.broadcastTrainingLog(symbolUpper, `💾 Model saved to persistent storage`, 'success');
 
           return metrics;
         } finally {
@@ -1412,6 +1471,7 @@ export async function registerRoutes(
       const symbolUpper = req.body.symbol?.toUpperCase();
       if (symbolUpper) {
         trainingLocks.delete(symbolUpper);
+        wsInstance.broadcastTrainingLog(symbolUpper, `❌ Training failed: ${error?.message || 'Unknown error'}`, 'error');
       }
       console.error("Error training ML model:", error);
       const errorMessage = error?.message || error?.toString() || "Failed to train ML model";
@@ -1433,9 +1493,23 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Days must be between 1 and 7" });
       }
 
-      // Check if model is trained for this symbol
-      const cached = predictorCache.get(symbol);
-      const predictor = cached?.predictor || cached;
+      // Check if model is trained for this symbol (memory cache first, then disk)
+      let cached = predictorCache.get(symbol);
+      let predictor = cached?.predictor || cached;
+
+      if (!predictor) {
+        // Try loading from disk
+        predictor = await modelStorage.loadModel(symbol);
+        if (predictor) {
+          const metadata = await modelStorage.listModels();
+          const modelMeta = metadata.find(m => m.symbol === symbol);
+          predictorCache.set(symbol, {
+            predictor,
+            trainedAt: modelMeta?.trainedAt || new Date().toISOString(),
+            metrics: modelMeta?.metrics
+          });
+        }
+      }
 
       if (!predictor) {
         return res.status(404).json({
@@ -1468,8 +1542,22 @@ export async function registerRoutes(
       console.log(`Quick predict for ${symbol}...`);
 
       // Check if model exists, if not, train it
-      const cached = predictorCache.get(symbol);
+      let cached = predictorCache.get(symbol);
       let predictor = cached?.predictor || cached;
+
+      if (!predictor) {
+        // Try loading from disk
+        predictor = await modelStorage.loadModel(symbol);
+        if (predictor) {
+          const metadata = await modelStorage.listModels();
+          const modelMeta = metadata.find(m => m.symbol === symbol);
+          predictorCache.set(symbol, {
+            predictor,
+            trainedAt: modelMeta?.trainedAt || new Date().toISOString(),
+            metrics: modelMeta?.metrics
+          });
+        }
+      }
 
       if (!predictor) {
         console.log(`No cached model for ${symbol}, training now...`);
@@ -1482,6 +1570,10 @@ export async function registerRoutes(
 
         // Train with fewer epochs for speed
         await predictor.train(symbol, "1y", 40);
+        
+        // Save to persistent storage
+        await modelStorage.saveModel(symbol, predictor);
+        
         predictorCache.set(symbol, {
           predictor,
           trainedAt: new Date().toISOString()
@@ -1502,32 +1594,45 @@ export async function registerRoutes(
     }
   });
 
-  // Get list of trained models
+  // Get list of trained models (from persistent storage, shared across all users)
   app.get("/api/ml/models", requireAuth, async (_req, res) => {
     try {
-      const models = Array.from(predictorCache.entries()).map(([symbol, cached]) => ({
-        symbol,
-        trainedAt: cached?.trainedAt || new Date().toISOString()
-      }));
+      // Get from persistent storage (source of truth)
+      const savedModels = await modelStorage.listModels();
+      
+      // Also include any in-memory models not yet saved
+      const memoryModels = Array.from(predictorCache.entries())
+        .filter(([symbol]) => !savedModels.find(m => m.symbol === symbol))
+        .map(([symbol, cached]) => ({
+          symbol,
+          trainedAt: cached?.trainedAt || new Date().toISOString()
+        }));
 
-      res.json({ models });
+      const allModels = [...savedModels, ...memoryModels];
+      res.json({ models: allModels });
     } catch (error) {
       console.error("Error fetching models:", error);
       res.status(500).json({ error: "Failed to fetch models" });
     }
   });
 
-  // Clear model cache
+  // Delete model (removes from both memory and persistent storage - shared across all users)
   app.delete("/api/ml/models/:symbol", requireAuth, async (req, res) => {
     try {
       const { symbol } = req.params;
+      const symbolUpper = symbol.toUpperCase();
 
-      if (predictorCache.has(symbol)) {
-        predictorCache.delete(symbol);
-        res.json({ success: true, message: `Model for ${symbol} removed` });
-      } else {
-        res.status(404).json({ error: "Model not found" });
+      // Delete from persistent storage
+      if (await modelStorage.modelExists(symbolUpper)) {
+        await modelStorage.deleteModel(symbolUpper);
       }
+
+      // Remove from memory cache
+      if (predictorCache.has(symbolUpper)) {
+        predictorCache.delete(symbolUpper);
+      }
+
+      res.json({ success: true, message: `Model for ${symbolUpper} deleted` });
     } catch (error) {
       console.error("Error deleting model:", error);
       res.status(500).json({ error: "Failed to delete model" });

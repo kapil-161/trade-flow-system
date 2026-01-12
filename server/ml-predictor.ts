@@ -396,10 +396,12 @@ export class LSTMPriceModel {
   private model: tf.LayersModel | null = null;
   private sequenceLength: number;
   private numFeatures: number;
+  private logger?: (message: string, type?: 'info' | 'success' | 'error' | 'progress') => void;
 
-  constructor(sequenceLength: number, numFeatures: number) {
+  constructor(sequenceLength: number, numFeatures: number, logger?: (message: string, type?: 'info' | 'success' | 'error' | 'progress') => void) {
     this.sequenceLength = sequenceLength;
     this.numFeatures = numFeatures;
+    this.logger = logger;
   }
 
   async build(): Promise<void> {
@@ -478,14 +480,24 @@ export class LSTMPriceModel {
 
           // Reduced logging frequency (every 20 epochs or last epoch)
           if (epoch % 20 === 0 || epoch === epochs - 1) {
-            console.log(`Epoch ${epoch}: loss = ${logs?.loss?.toFixed(4)}, val_loss = ${logs?.val_loss?.toFixed(4)}`);
+            const msg = `Epoch ${epoch}: loss = ${logs?.loss?.toFixed(4)}, val_loss = ${logs?.val_loss?.toFixed(4)}`;
+            if (this.logger) {
+              this.logger(msg, 'progress');
+            } else {
+              console.log(msg);
+            }
           }
         }
       },
       verbose: 0
     });
 
-    console.log(`   Best validation loss: ${bestValLoss.toFixed(4)} at epoch ${bestEpoch}`);
+    const bestMsg = `   Best validation loss: ${bestValLoss.toFixed(4)} at epoch ${bestEpoch}`;
+    if (this.logger) {
+      this.logger(bestMsg, 'info');
+    } else {
+      console.log(bestMsg);
+    }
 
     xTrainTensor.dispose();
     yTrainTensor.dispose();
@@ -520,10 +532,12 @@ export class LSTMDirectionModel {
   private model: tf.LayersModel | null = null;
   private sequenceLength: number;
   private numFeatures: number;
+  private logger?: (message: string, type?: 'info' | 'success' | 'error' | 'progress') => void;
 
-  constructor(sequenceLength: number, numFeatures: number) {
+  constructor(sequenceLength: number, numFeatures: number, logger?: (message: string, type?: 'info' | 'success' | 'error' | 'progress') => void) {
     this.sequenceLength = sequenceLength;
     this.numFeatures = numFeatures;
+    this.logger = logger;
   }
 
   async build(): Promise<void> {
@@ -599,14 +613,24 @@ export class LSTMDirectionModel {
 
           // Reduced logging frequency (every 10 epochs or last epoch)
           if (epoch % 10 === 0 || epoch === epochs - 1) {
-            console.log(`Direction Epoch ${epoch}: loss = ${logs?.loss?.toFixed(4)}, acc = ${logs?.acc?.toFixed(4)}`);
+            const msg = `Direction Epoch ${epoch}: loss = ${logs?.loss?.toFixed(4)}, acc = ${logs?.acc?.toFixed(4)}`;
+            if (this.logger) {
+              this.logger(msg, 'progress');
+            } else {
+              console.log(msg);
+            }
           }
         }
       },
       verbose: 0
     });
 
-    console.log(`   Best validation loss: ${bestValLoss.toFixed(4)} at epoch ${bestEpoch}`);
+    const bestMsg = `   Best validation loss: ${bestValLoss.toFixed(4)} at epoch ${bestEpoch}`;
+    if (this.logger) {
+      this.logger(bestMsg, 'info');
+    } else {
+      console.log(bestMsg);
+    }
 
     xTrainTensor.dispose();
     yTrainTensor.dispose();

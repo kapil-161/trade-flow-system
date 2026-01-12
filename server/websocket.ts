@@ -161,6 +161,25 @@ export class RealtimeMarketData {
     console.log(`Real-time market data updates started (${this.UPDATE_INTERVAL_MS}ms interval)`);
   }
 
+  /**
+   * Broadcast training log to all connected clients
+   */
+  public broadcastTrainingLog(symbol: string, message: string, type: 'info' | 'success' | 'error' | 'progress' = 'info') {
+    const logMessage = {
+      type: "training_log",
+      symbol,
+      message,
+      logType: type,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.clients.forEach(client => {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify(logMessage));
+      }
+    });
+  }
+
   public stop() {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
