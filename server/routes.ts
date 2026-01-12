@@ -10,6 +10,18 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Health check endpoint
+  app.get("/api/health", async (req, res) => {
+    try {
+      // Test database connection
+      await storage.getAllHoldings();
+      res.json({ status: "ok", database: "connected" });
+    } catch (error) {
+      console.error("Health check failed:", error);
+      res.status(503).json({ status: "error", database: "disconnected", error: String(error) });
+    }
+  });
+
   // Market Data - Yahoo Finance proxy with caching
   app.get("/api/market/quote/:symbol", async (req, res) => {
     const { symbol } = req.params;

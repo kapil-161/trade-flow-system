@@ -35,24 +35,31 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 
 export function setupAuth(app: Express) {
   // Session configuration with PostgreSQL store
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || "trade-flow-secret-key-change-in-production",
-      resave: false,
-      saveUninitialized: false,
-      store: new PgStore({
-        pool: pool,
-        tableName: "session",
-        createTableIfMissing: true,
-      }),
-      cookie: {
-        secure: process.env.NODE_ENV === "production",
-        httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
-        sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
-      },
-    })
-  );
+  try {
+    const sessionStore = new PgStore({
+      pool: pool,
+      tableName: "session",
+      createTableIfMissing: true,
+    });
+
+    app.use(
+      session({
+        secret: process.env.SESSION_SECRET || "trade-flow-secret-key-change-in-production",
+        resave: false,
+        saveUninitialized: false,
+        store: sessionStore,
+        cookie: {
+          secure: process.env.NODE_ENV === "production",
+          httpOnly: true,
+          maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+          sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+        },
+      })
+    );
+  } catch (error) {
+    console.error("Failed to initialize session store:", error);
+    throw error;
+  }
 
   app.use(passport.initialize());
   app.use(passport.session());
@@ -75,6 +82,7 @@ export function setupAuth(app: Express) {
 
         return done(null, user);
       } catch (error) {
+        console.error("Error in passport local strategy:", error);
         return done(error);
       }
     })
@@ -89,6 +97,7 @@ export function setupAuth(app: Express) {
       const user = await storage.getUserById(id);
       done(null, user);
     } catch (error) {
+      console.error("Error deserializing user:", error);
       done(error);
     }
   });
@@ -115,7 +124,10 @@ export function setupAuth(app: Express) {
 
       // Log in the user automatically
       req.login(user, (err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("Session login error during registration:", err);
+          return res.status(500).json({ error: "Failed to establish session" });
+        }
         res.status(201).json({
           id: user.id,
           username: user.username,
@@ -133,7 +145,8 @@ export function setupAuth(app: Express) {
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: User | false, info: any) => {
       if (err) {
-        return next(err);
+        console.error("Passport authentication error:", err);
+        return res.status(500).json({ error: "Internal server error during authentication" });
       }
 
       if (!user) {
@@ -141,7 +154,10 @@ export function setupAuth(app: Express) {
       }
 
       req.login(user, (err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("Session login error:", err);
+          return res.status(500).json({ error: "Failed to establish session" });
+        }
         res.json({
           id: user.id,
           username: user.username,
