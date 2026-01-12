@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useHistoricalData } from "@/lib/api";
+import { usePortfolioHistory } from "@/lib/api";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, ComposedChart, Bar, Cell, Line, Area } from "recharts";
 import { useState, useMemo } from "react";
 import { BarChart3, LineChart, CandlestickChart } from "lucide-react";
@@ -23,26 +23,47 @@ const CHART_STYLES = [
 type ChartStyleId = typeof CHART_STYLES[number]["id"];
 
 // Transform OHLC data for candlestick visualization
-const transformDataForCandlesticks = (data: any[]) => {
+const transformDataForCandlesticks = (data: any[], interval: string) => {
   if (!data || data.length === 0) return [];
 
-  return data.map(d => ({
-    ...d,
-    // For candlestick body - from open to close
-    candleBottom: Math.min(d.open, d.close),
-    candleHeight: Math.abs(d.close - d.open),
-    // For wicks - full high to low range
-    wickBottom: d.low,
-    wickHeight: d.high - d.low,
-    // Color indicator
-    isUp: d.close >= d.open,
+  return data.map(d => {
+    const date = new Date(d.date);
+    const isValidDate = !isNaN(date.getTime());
+    
     // Format date for display
-    displayDate: new Date(d.date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      ...(d.interval === '5m' || d.interval === '30m' ? { hour: '2-digit', minute: '2-digit' } : {})
-    }),
-  }));
+    let displayDate = d.date; // Fallback
+    if (isValidDate) {
+      // For intraday intervals, show time
+      if (interval === '5m' || interval === '30m') {
+        displayDate = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } else {
+        // For daily/weekly intervals, show date only
+        displayDate = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          ...(interval === '1wk' ? { year: '2-digit' } : {})
+        });
+      }
+    }
+    
+    return {
+      ...d,
+      // For candlestick body - from open to close
+      candleBottom: Math.min(d.open, d.close),
+      candleHeight: Math.abs(d.close - d.open),
+      // For wicks - full high to low range
+      wickBottom: d.low,
+      wickHeight: d.high - d.low,
+      // Color indicator
+      isUp: d.close >= d.open,
+      displayDate,
+    };
+  });
 };
 
 export function FinancialChart() {
@@ -50,17 +71,16 @@ export function FinancialChart() {
   const [chartStyle, setChartStyle] = useState<ChartStyleId>("candlestick");
   const currentTimeFrame = TIME_FRAMES[selectedTimeFrame];
 
-  // Fetch historical data - using BTC-USD as proxy for portfolio performance
-  const { data: historicalData, isLoading, error } = useHistoricalData(
-    "BTC-USD",
+  // Fetch actual portfolio value history
+  const { data: historicalData, isLoading, error } = usePortfolioHistory(
     currentTimeFrame.range,
     currentTimeFrame.interval
   );
 
   const candlestickData = useMemo(() => {
     if (!historicalData) return [];
-    return transformDataForCandlesticks(historicalData);
-  }, [historicalData]);
+    return transformDataForCandlesticks(historicalData, currentTimeFrame.interval);
+  }, [historicalData, currentTimeFrame.interval]);
 
   const renderChart = () => {
     if (chartStyle === "line") {

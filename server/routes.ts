@@ -726,6 +726,90 @@ export async function registerRoutes(
     }
   });
 
+  // Get portfolio value history over time
+  app.get("/api/portfolio/history", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { range = "3mo", interval = "1d" } = req.query;
+      
+      const holdings = await storage.getAllHoldings(user.id);
+      const trades = await storage.getAllTrades(user.id);
+      
+      if (holdings.length === 0) {
+        return res.json([]);
+      }
+
+      // Get all unique symbols from holdings
+      const symbols = Array.from(new Set(holdings.map(h => h.symbol)));
+      
+      // Fetch historical data for all symbols
+      const historicalDataPromises = symbols.map(symbol => 
+        marketCache.getHistory(symbol, range as string, interval as string).catch(() => [])
+      );
+      
+      const allHistoricalData = await Promise.all(historicalDataPromises);
+      
+      // Create a map of symbol -> historical prices by date
+      const pricesByDate = new Map<string, Map<string, number>>();
+      
+      symbols.forEach((symbol, index) => {
+        const history = allHistoricalData[index];
+        if (!history || history.length === 0) return;
+        
+        const symbolPrices = new Map<string, number>();
+        history.forEach((item: any) => {
+          const date = new Date(item.date).toISOString().split('T')[0];
+          symbolPrices.set(date, item.close);
+        });
+        pricesByDate.set(symbol, symbolPrices);
+      });
+
+      // Get all unique dates from all historical data
+      const allDates = new Set<string>();
+      allHistoricalData.forEach(history => {
+        history.forEach((item: any) => {
+          const date = new Date(item.date).toISOString().split('T')[0];
+          allDates.add(date);
+        });
+      });
+
+      // Sort dates chronologically
+      const sortedDates = Array.from(allDates).sort();
+
+      // Calculate portfolio value for each date
+      const portfolioHistory = sortedDates.map(date => {
+        let totalValue = 0;
+        
+        holdings.forEach(holding => {
+          const symbolPrices = pricesByDate.get(holding.symbol);
+          const price = symbolPrices?.get(date);
+          
+          if (price !== undefined) {
+            totalValue += parseFloat(holding.quantity) * price;
+          } else {
+            // If no price for this date, use average price as fallback
+            totalValue += parseFloat(holding.quantity) * parseFloat(holding.avgPrice);
+          }
+        });
+        
+        return {
+          date,
+          value: totalValue,
+          open: totalValue, // For compatibility with chart
+          high: totalValue,
+          low: totalValue,
+          close: totalValue,
+          volume: 0,
+        };
+      });
+
+      res.json(portfolioHistory);
+    } catch (error) {
+      console.error("Error fetching portfolio history:", error);
+      res.status(500).json({ error: "Failed to fetch portfolio history" });
+    }
+  });
+
   // Export portfolio to CSV or JSON
   app.get("/api/portfolio/export", requireAuth, async (req, res) => {
     try {

@@ -82,6 +82,21 @@ export function useHistoricalData(symbol: string, range = "1mo", interval = "1d"
   });
 }
 
+// Portfolio value history hook
+export function usePortfolioHistory(range = "3mo", interval = "1d") {
+  return useQuery<HistoricalData[]>({
+    queryKey: ["portfolio-history", range, interval],
+    queryFn: async () => {
+      const response = await fetch(`/api/portfolio/history?range=${range}&interval=${interval}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch portfolio history");
+      return response.json();
+    },
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+  });
+}
+
 // Holdings Hooks
 export function useHoldings() {
   return useQuery<Holding[]>({
