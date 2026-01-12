@@ -23,6 +23,54 @@ export async function registerRoutes(
     }
   });
 
+  // One-time setup endpoint: Set first admin (only works if no admins exist)
+  app.post("/api/setup/first-admin", async (req, res) => {
+    try {
+      const { username } = req.body;
+      
+      if (!username) {
+        return res.status(400).json({ error: "Username is required" });
+      }
+
+      // Check if any admins exist
+      const allUsers = await storage.getAllUsers();
+      const hasAdmins = allUsers.some(u => u.isAdmin === "true");
+      
+      if (hasAdmins) {
+        return res.status(403).json({ error: "Admin already exists. Use admin panel to manage users." });
+      }
+
+      // Find the user
+      const user = await storage.getUserByUsername(username);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Set as admin
+      const updatedUser = await storage.updateUser(user.id, {
+        isAdmin: "true",
+      });
+
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to update user" });
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully set ${username} as the first administrator`,
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          isAdmin: true,
+        },
+      });
+    } catch (error) {
+      console.error("Error setting first admin:", error);
+      res.status(500).json({ error: "Failed to set first admin" });
+    }
+  });
+
   // Market Data - Yahoo Finance proxy with caching
   app.get("/api/market/quote/:symbol", async (req, res) => {
     const { symbol } = req.params;
