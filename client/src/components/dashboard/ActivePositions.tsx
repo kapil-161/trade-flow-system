@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Bitcoin, CircleDollarSign, MoreVertical, Edit2, Trash2, Trash } from "lucide-react";
+import { MoreVertical, Edit2, Trash2, Trash } from "lucide-react";
 import { useHoldings, useMultiQuotes, useUpdateHolding, useDeleteHolding, useDeleteAllHoldings } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -69,6 +68,10 @@ export function ActivePositions() {
   }
 
   const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
+
+  // Group holdings by type
+  const cryptoHoldings = holdings.filter(h => h.type === "crypto");
+  const stockHoldings = holdings.filter(h => h.type === "stock");
 
   const handleEdit = (holding: Holding) => {
     setEditingHolding(holding);
@@ -162,90 +165,131 @@ export function ActivePositions() {
             <p className="text-muted-foreground">No positions yet. Place your first trade to get started.</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-border/40">
-                <TableHead className="w-[100px]">Asset</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Holdings</TableHead>
-                <TableHead className="text-right">Value</TableHead>
-                <TableHead className="text-right">P&L</TableHead>
-                <TableHead className="text-right">Avg Price</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {holdings.map((holding) => {
-                const currentPrice = priceMap[holding.symbol] || 0;
-                const quantity = parseFloat(holding.quantity);
-                const avgPrice = parseFloat(holding.avgPrice);
-                const value = quantity * currentPrice;
-                const cost = quantity * avgPrice;
-                const pnl = value - cost;
-                const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
+          <div className="space-y-8">
+            {/* Cryptocurrencies Section */}
+            {cryptoHoldings.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Cryptocurrencies</h3>
+                <div className="space-y-3">
+                  {cryptoHoldings.map((holding) => {
+                    const currentPrice = priceMap[holding.symbol] || 0;
+                    const quantity = parseFloat(holding.quantity);
+                    const avgPrice = parseFloat(holding.avgPrice);
+                    const value = quantity * currentPrice;
+                    const cost = quantity * avgPrice;
+                    const pnl = value - cost;
+                    const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
-                return (
-                  <TableRow key={holding.id} className="hover:bg-white/5 border-border/40 transition-colors" data-testid={`row-holding-${holding.symbol}`}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "h-8 w-8 rounded-full flex items-center justify-center bg-secondary/50 border border-border/50",
-                          holding.type === "crypto" ? "text-orange-400" : "text-blue-400"
-                        )}>
-                          {holding.type === "crypto" ? <Bitcoin className="h-4 w-4" /> : <CircleDollarSign className="h-4 w-4" />}
+                    return (
+                      <div 
+                        key={holding.id} 
+                        className="flex items-center justify-between py-2 border-b border-border/40 group hover:bg-white/5 transition-colors"
+                        data-testid={`row-holding-${holding.symbol}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
+                            {holding.symbol}
+                          </div>
+                          <div className="text-sm text-muted-foreground font-mono-nums">
+                            {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-holding-actions-${holding.symbol}`}>
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
+                                <Edit2 className="h-4 w-4" /> Edit Position
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDelete(holding.id, holding.symbol)} 
+                                className="gap-2 text-loss focus:text-loss"
+                                data-testid={`menu-delete-${holding.symbol}`}
+                              >
+                                <Trash2 className="h-4 w-4" /> Remove Position
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                        <div>
-                          <div className="font-bold" data-testid={`text-symbol-${holding.symbol}`}>{holding.symbol}</div>
-                          <div className="text-xs text-muted-foreground" data-testid={`text-name-${holding.symbol}`}>{holding.name}</div>
+                        <div className="flex items-center gap-6">
+                          <div className={cn("font-mono-nums text-sm", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
+                            {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                          </div>
+                          <div className={cn("font-mono-nums text-sm w-16 text-right", pnl >= 0 ? "text-profit" : "text-loss")}>
+                            {pnl >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
+                          </div>
                         </div>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono-nums" data-testid={`text-price-${holding.symbol}`}>
-                      ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right font-mono-nums" data-testid={`text-quantity-${holding.symbol}`}>
-                      {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
-                    </TableCell>
-                    <TableCell className="text-right font-mono-nums font-medium" data-testid={`text-value-${holding.symbol}`}>
-                      ${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className={cn("font-mono-nums font-medium", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
-                        {pnl >= 0 ? "+" : ""}{pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Stocks Section */}
+            {stockHoldings.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Stocks</h3>
+                <div className="space-y-3">
+                  {stockHoldings.map((holding) => {
+                    const currentPrice = priceMap[holding.symbol] || 0;
+                    const quantity = parseFloat(holding.quantity);
+                    const avgPrice = parseFloat(holding.avgPrice);
+                    const value = quantity * currentPrice;
+                    const cost = quantity * avgPrice;
+                    const pnl = value - cost;
+                    const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
+
+                    return (
+                      <div 
+                        key={holding.id} 
+                        className="flex items-center justify-between py-2 border-b border-border/40 group hover:bg-white/5 transition-colors"
+                        data-testid={`row-holding-${holding.symbol}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
+                            {holding.symbol}
+                          </div>
+                          <div className="text-sm text-muted-foreground font-mono-nums">
+                            {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} shares
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-holding-actions-${holding.symbol}`}>
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
+                                <Edit2 className="h-4 w-4" /> Edit Position
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDelete(holding.id, holding.symbol)} 
+                                className="gap-2 text-loss focus:text-loss"
+                                data-testid={`menu-delete-${holding.symbol}`}
+                              >
+                                <Trash2 className="h-4 w-4" /> Remove Position
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <div className={cn("font-mono-nums text-sm", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
+                            {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                          </div>
+                          <div className={cn("font-mono-nums text-sm w-16 text-right", pnl >= 0 ? "text-profit" : "text-loss")}>
+                            {pnl >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
+                          </div>
+                        </div>
                       </div>
-                      <div className={cn("text-xs", pnl >= 0 ? "text-profit/70" : "text-loss/70")}>
-                        {pnlPercent.toFixed(2)}%
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono-nums text-muted-foreground text-sm" data-testid={`text-avgprice-${holding.symbol}`}>
-                      ${avgPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0" data-testid={`button-holding-actions-${holding.symbol}`}>
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
-                            <Edit2 className="h-4 w-4" /> Edit Position
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(holding.id, holding.symbol)} 
-                            className="gap-2 text-loss focus:text-loss"
-                            data-testid={`menu-delete-${holding.symbol}`}
-                          >
-                            <Trash2 className="h-4 w-4" /> Remove Position
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
 
