@@ -291,41 +291,54 @@ export interface ScannerSignalsResponse {
 // Portfolio Scanner Signals Hook - fetches signals for portfolio holdings
 export function usePortfolioScannerSignals(symbols: string[]) {
   return useQuery<Record<string, ScannerSignal>>({
-    queryKey: ["portfolio-scanner-signals", symbols],
+    queryKey: ["portfolio-scanner-signals", symbols.sort().join(",")], // Sort for consistent cache key
     queryFn: async () => {
       if (symbols.length === 0) return {};
       
-      const response = await fetch("/api/backtest/batch-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbols,
-          config: {
-            emaFast: 21,
-            emaSlow: 50,
-            rsiLower: 45,
-            rsiUpper: 65,
-            scoreThreshold: 7,
-            trendFilter: true,
-            volatilityFilter: true,
-          },
-        }),
-        credentials: "include",
-      });
-      
-      if (!response.ok) throw new Error("Failed to fetch scanner signals");
-      const data: ScannerSignalsResponse = await response.json();
-      
-      // Convert array to object keyed by symbol for easy lookup
-      const signalsMap: Record<string, ScannerSignal> = {};
-      data.results.forEach((signal) => {
-        signalsMap[signal.symbol] = signal;
-      });
-      
-      return signalsMap;
+      try {
+        const response = await fetch("/api/backtest/batch-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbols: symbols.map(s => s.toUpperCase()), // Ensure uppercase
+            config: {
+              emaFast: 21,
+              emaSlow: 50,
+              rsiLower: 45,
+              rsiUpper: 65,
+              scoreThreshold: 7,
+              trendFilter: true,
+              volatilityFilter: true,
+            },
+          }),
+          credentials: "include",
+        });
+        
+        if (!response.ok) {
+          console.warn("Failed to fetch scanner signals:", response.status, response.statusText);
+          return {}; // Return empty object instead of throwing
+        }
+        
+        const data: ScannerSignalsResponse = await response.json();
+        
+        // Convert array to object keyed by symbol for easy lookup (case-insensitive)
+        const signalsMap: Record<string, ScannerSignal> = {};
+        if (data.results && Array.isArray(data.results)) {
+          data.results.forEach((signal) => {
+            // Store with uppercase key for consistency
+            signalsMap[signal.symbol.toUpperCase()] = signal;
+          });
+        }
+        
+        return signalsMap;
+      } catch (error) {
+        console.error("Error fetching scanner signals:", error);
+        return {}; // Return empty object on error instead of throwing
+      }
     },
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
     enabled: symbols.length > 0,
     staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
+    retry: 1, // Retry once on failure
   });
 }

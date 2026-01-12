@@ -198,7 +198,8 @@ export function ActivePositions() {
                     const pnl = value - cost;
                     const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
-                    const scannerSignal = scannerSignals[holding.symbol];
+                    // Lookup scanner signal (case-insensitive)
+                    const scannerSignal = scannerSignals[holding.symbol.toUpperCase()] || scannerSignals[holding.symbol];
                     
                     return (
                       <div 
@@ -210,7 +211,12 @@ export function ActivePositions() {
                           <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
                             {holding.symbol}
                           </div>
-                          {scannerSignal && (
+                          {signalsLoading ? (
+                            <Badge variant="secondary" className="text-xs font-medium gap-1 opacity-50">
+                              <Minus className="h-3 w-3 animate-pulse" />
+                              Loading...
+                            </Badge>
+                          ) : scannerSignal ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -245,7 +251,7 @@ export function ActivePositions() {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                          )}
+                          ) : null}
                           <div className="text-sm text-muted-foreground font-mono-nums">
                             {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
                           </div>
@@ -298,7 +304,8 @@ export function ActivePositions() {
                     const pnl = value - cost;
                     const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
-                    const scannerSignal = scannerSignals[holding.symbol];
+                    // Lookup scanner signal (case-insensitive)
+                    const scannerSignal = scannerSignals[holding.symbol.toUpperCase()] || scannerSignals[holding.symbol];
                     
                     return (
                       <div 
@@ -310,7 +317,12 @@ export function ActivePositions() {
                           <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
                             {holding.symbol}
                           </div>
-                          {scannerSignal && (
+                          {signalsLoading ? (
+                            <Badge variant="secondary" className="text-xs font-medium gap-1 opacity-50">
+                              <Minus className="h-3 w-3 animate-pulse" />
+                              Loading...
+                            </Badge>
+                          ) : scannerSignal ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -345,7 +357,7 @@ export function ActivePositions() {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                          )}
+                          ) : null}
                           <div className="text-sm text-muted-foreground font-mono-nums">
                             {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} shares
                           </div>
