@@ -33,35 +33,55 @@ const allowlist = [
 ];
 
 async function buildAll() {
-  await rm("dist", { recursive: true, force: true });
+  try {
+    await rm("dist", { recursive: true, force: true });
 
-  console.log("building client...");
-  await viteBuild();
+    console.log("building client...");
+    try {
+      await viteBuild();
+      console.log("✓ Client build completed");
+    } catch (error) {
+      console.error("✗ Client build failed:", error);
+      throw error;
+    }
 
-  console.log("building server...");
-  const pkg = JSON.parse(await readFile("package.json", "utf-8"));
-  const allDeps = [
-    ...Object.keys(pkg.dependencies || {}),
-    ...Object.keys(pkg.devDependencies || {}),
-  ];
-  const externals = allDeps.filter((dep) => !allowlist.includes(dep));
+    console.log("building server...");
+    const pkg = JSON.parse(await readFile("package.json", "utf-8"));
+    const allDeps = [
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.devDependencies || {}),
+    ];
+    const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  await esbuild({
-    entryPoints: ["server/index.ts"],
-    platform: "node",
-    bundle: true,
-    format: "cjs",
-    outfile: "dist/index.cjs",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
-    minify: true,
-    external: externals,
-    logLevel: "info",
-  });
+    try {
+      await esbuild({
+        entryPoints: ["server/index.ts"],
+        platform: "node",
+        bundle: true,
+        format: "cjs",
+        outfile: "dist/index.cjs",
+        define: {
+          "process.env.NODE_ENV": '"production"',
+        },
+        minify: true,
+        external: externals,
+        logLevel: "info",
+      });
+      console.log("✓ Server build completed");
+    } catch (error) {
+      console.error("✗ Server build failed:", error);
+      throw error;
+    }
+
+    console.log("✓ Build completed successfully");
+  } catch (error) {
+    console.error("Build failed:", error);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    process.exit(1);
+  }
 }
 
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+buildAll();

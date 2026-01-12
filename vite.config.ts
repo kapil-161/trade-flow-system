@@ -8,7 +8,7 @@ import { metaImagesPlugin } from "./vite-plugin-meta-images";
 export default defineConfig({
   plugins: [
     react(),
-    runtimeErrorOverlay(),
+    ...(process.env.NODE_ENV !== "production" ? [runtimeErrorOverlay()] : []),
     tailwindcss(),
     metaImagesPlugin(),
     ...(process.env.NODE_ENV !== "production" &&
@@ -39,6 +39,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+    reportCompressedSize: false,
+    sourcemap: false,
   },
   server: {
     host: "0.0.0.0",
@@ -47,5 +55,8 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+  },
+  optimizeDeps: {
+    exclude: ["@replit/vite-plugin-cartographer", "@replit/vite-plugin-dev-banner"],
   },
 });
