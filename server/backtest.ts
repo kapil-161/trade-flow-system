@@ -61,7 +61,7 @@ interface HistoricalCandle {
   volume: number;
 }
 
-class TechnicalIndicators {
+export class TechnicalIndicators {
   static sma(data: number[], period: number): number[] {
     const result: number[] = [];
     for (let i = 0; i < data.length; i++) {
@@ -149,6 +149,112 @@ class TechnicalIndicators {
     }
     return result;
   }
+
+  static detectRsiDivergence(prices: number[], rsi: number[], lookback: number = 14): "bullish" | "bearish" | "none" {
+    if (prices.length < lookback || rsi.length < lookback) return "none";
+
+    const recentPrices = prices.slice(-lookback);
+    const recentRsi = rsi.slice(-lookback);
+
+    // Filter out NaN values
+    const validPrices = recentPrices.filter(p => !isNaN(p));
+    const validRsi = recentRsi.filter(r => !isNaN(r));
+
+    if (validPrices.length < lookback || validRsi.length < lookback) return "none";
+
+    const midpoint = Math.floor(lookback / 2);
+    const firstHalfPrices = recentPrices.slice(0, midpoint);
+    const secondHalfPrices = recentPrices.slice(midpoint);
+    const firstHalfRsi = recentRsi.slice(0, midpoint);
+    const secondHalfRsi = recentRsi.slice(midpoint);
+
+    // Filter NaN values before calculating min/max
+    const firstHalfPricesValid = firstHalfPrices.filter(p => !isNaN(p));
+    const secondHalfPricesValid = secondHalfPrices.filter(p => !isNaN(p));
+    const firstHalfRsiValid = firstHalfRsi.filter(r => !isNaN(r));
+    const secondHalfRsiValid = secondHalfRsi.filter(r => !isNaN(r));
+
+    if (firstHalfPricesValid.length === 0 || secondHalfPricesValid.length === 0 ||
+        firstHalfRsiValid.length === 0 || secondHalfRsiValid.length === 0) {
+      return "none";
+    }
+
+    const minFirstPrice = Math.min(...firstHalfPricesValid);
+    const minSecondPrice = Math.min(...secondHalfPricesValid);
+    const minFirstRsi = Math.min(...firstHalfRsiValid);
+    const minSecondRsi = Math.min(...secondHalfRsiValid);
+
+    if (!isNaN(minFirstPrice) && !isNaN(minSecondPrice) && !isNaN(minFirstRsi) && !isNaN(minSecondRsi)) {
+      if (minSecondPrice < minFirstPrice && minSecondRsi > minFirstRsi) {
+        return "bullish";
+      }
+    }
+
+    const maxFirstPrice = Math.max(...firstHalfPricesValid);
+    const maxSecondPrice = Math.max(...secondHalfPricesValid);
+    const maxFirstRsi = Math.max(...firstHalfRsiValid);
+    const maxSecondRsi = Math.max(...secondHalfRsiValid);
+
+    if (!isNaN(maxFirstPrice) && !isNaN(maxSecondPrice) && !isNaN(maxFirstRsi) && !isNaN(maxSecondRsi)) {
+      if (maxSecondPrice > maxFirstPrice && maxSecondRsi < maxFirstRsi) {
+        return "bearish";
+      }
+    }
+
+    return "none";
+  }
+
+  static detectVolumeDivergence(prices: number[], volumes: number[], lookback: number = 14): "bullish" | "bearish" | "none" {
+    if (prices.length < lookback || volumes.length < lookback) return "none";
+
+    const recentPrices = prices.slice(-lookback);
+    const recentVolumes = volumes.slice(-lookback);
+
+    // Filter out NaN values
+    const validPrices = recentPrices.filter(p => !isNaN(p));
+    const validVolumes = recentVolumes.filter(v => !isNaN(v));
+
+    if (validPrices.length < lookback || validVolumes.length < lookback) return "none";
+
+    const midpoint = Math.floor(lookback / 2);
+    const firstHalfPrices = recentPrices.slice(0, midpoint);
+    const secondHalfPrices = recentPrices.slice(midpoint);
+    const firstHalfVolumes = recentVolumes.slice(0, midpoint);
+    const secondHalfVolumes = recentVolumes.slice(midpoint);
+
+    // Filter NaN values before calculations
+    const firstHalfPricesValid = firstHalfPrices.filter(p => !isNaN(p));
+    const secondHalfPricesValid = secondHalfPrices.filter(p => !isNaN(p));
+    const firstHalfVolumesValid = firstHalfVolumes.filter(v => !isNaN(v));
+    const secondHalfVolumesValid = secondHalfVolumes.filter(v => !isNaN(v));
+
+    if (firstHalfPricesValid.length === 0 || secondHalfPricesValid.length === 0 ||
+        firstHalfVolumesValid.length === 0 || secondHalfVolumesValid.length === 0) {
+      return "none";
+    }
+
+    const maxFirstPrice = Math.max(...firstHalfPricesValid);
+    const maxSecondPrice = Math.max(...secondHalfPricesValid);
+    const avgFirstVolume = firstHalfVolumesValid.reduce((a, b) => a + b, 0) / firstHalfVolumesValid.length;
+    const avgSecondVolume = secondHalfVolumesValid.reduce((a, b) => a + b, 0) / secondHalfVolumesValid.length;
+
+    if (!isNaN(maxFirstPrice) && !isNaN(maxSecondPrice) && !isNaN(avgFirstVolume) && !isNaN(avgSecondVolume)) {
+      if (maxSecondPrice > maxFirstPrice && avgSecondVolume < avgFirstVolume * 0.8) {
+        return "bearish";
+      }
+    }
+
+    const minFirstPrice = Math.min(...firstHalfPricesValid);
+    const minSecondPrice = Math.min(...secondHalfPricesValid);
+
+    if (!isNaN(minFirstPrice) && !isNaN(minSecondPrice) && !isNaN(avgFirstVolume) && !isNaN(avgSecondVolume)) {
+      if (minSecondPrice < minFirstPrice && avgSecondVolume > avgFirstVolume * 1.2) {
+        return "bullish";
+      }
+    }
+
+    return "none";
+  }
 }
 
 export class BacktestEngine {
@@ -201,6 +307,10 @@ export class BacktestEngine {
     const signals: Record<string, "buy" | "sell"> = {};
     let capital = initialCapital;
     let position: { entryPrice: number; entryDate: string; quantity: number; stopLoss: number; takeProfit: number } | null = null;
+    
+    // Track daily capital for Sharpe Ratio calculation
+    const dailyCapital: Array<{ date: string; capital: number }> = [];
+    dailyCapital.push({ date: candles[50].date, capital: initialCapital });
 
     for (let i = 50; i < candles.length; i++) {
       const close = candles[i].close;
@@ -218,19 +328,23 @@ export class BacktestEngine {
           if (close < ema200[i]) continue;
         }
 
-        // 2. EMA Trend
+        // 2. RSI Overbought Filter: Don't enter if RSI is too high (overbought)
+        // RSI above 70 is typically overbought and should not trigger buy signals
+        if (rsi[i] > 70) continue;
+
+        // 3. EMA Trend
         if (close > emaFast[i] && emaFast[i] > emaSlow[i]) score += 3;
 
-        // 3. Volume Confirmation
+        // 4. Volume Confirmation
         if (volume > avgVolume[i] * 1.2) score += 2;
 
-        // 4. RSI Pullback zone
+        // 5. RSI Pullback zone
         if (rsi[i] >= config.rsiLower && rsi[i] <= config.rsiUpper) score += 2;
 
-        // 5. MACD Momentum
+        // 6. MACD Momentum
         if (macd.histogram[i] > 0 && macd.histogram[i] > macd.histogram[i-1]) score += 2;
 
-        // 6. Volatility Filter: Don't enter if volatility is too low
+        // 7. Volatility Filter: Don't enter if volatility is too low
         if (config.volatilityFilter && i > 0 && atr[i] < atr[i-1] * 0.8) continue;
 
         if (score >= config.scoreThreshold) {
@@ -294,6 +408,15 @@ export class BacktestEngine {
           position = null;
         }
       }
+      
+      // Track portfolio value at end of each day
+      // If in position, include unrealized P&L
+      let portfolioValue = capital;
+      if (position) {
+        const unrealizedPnL = (close - position.entryPrice) * position.quantity;
+        portfolioValue = capital + unrealizedPnL;
+      }
+      dailyCapital.push({ date, capital: portfolioValue });
     }
 
     const historicalData = candles.slice(50).map((c, i) => {
@@ -324,11 +447,41 @@ export class BacktestEngine {
     const profitFactor = avgLoss > 0 ? avgWin / avgLoss : 0;
     const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
+    // Calculate Sharpe Ratio from daily capital progression
+    let sharpeRatio = 0;
+    if (dailyCapital.length >= 2) {
+      const dailyReturns: number[] = [];
+      for (let i = 1; i < dailyCapital.length; i++) {
+        const prevCapital = dailyCapital[i - 1].capital;
+        const currentCapital = dailyCapital[i].capital;
+        if (prevCapital > 0) {
+          const dailyReturn = (currentCapital - prevCapital) / prevCapital;
+          dailyReturns.push(dailyReturn);
+        }
+      }
+      
+      if (dailyReturns.length >= 2) {
+        sharpeRatio = this.calculateSharpeRatio(dailyReturns);
+      }
+    }
+
+    // Ensure we include today's data if available
+    const lastCandle = candles[candles.length - 1];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastCandleDate = new Date(lastCandle.date);
+    lastCandleDate.setHours(0, 0, 0, 0);
+    
+    // Use today's date if the last candle is today, otherwise use the last candle's date
+    const endDate = lastCandleDate.getTime() === today.getTime() 
+      ? new Date().toISOString() 
+      : lastCandle.date;
+
     return {
       symbol,
       strategy: "Multi-Factor Weighted Momentum",
       startDate: candles[50].date,
-      endDate: candles[candles.length - 1].date,
+      endDate: endDate,
       initialCapital,
       finalCapital: capital,
       totalPnL,
@@ -340,13 +493,13 @@ export class BacktestEngine {
       averageWin: avgWin,
       averageLoss: avgLoss,
       profitFactor,
-      sharpeRatio: 2.0,
+      sharpeRatio,
       maxDrawdown: this.calculateMaxDrawdown(trades, initialCapital),
       historicalData,
     };
   }
 
-  private calculateMACD(closes: number[], fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  calculateMACD(closes: number[], fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
     const emaFast = TechnicalIndicators.ema(closes, fastPeriod);
     const emaSlow = TechnicalIndicators.ema(closes, slowPeriod);
     
@@ -368,7 +521,7 @@ export class BacktestEngine {
     return { macdLine, signal, histogram };
   }
 
-  private calculateSMA(data: number[], period: number): number[] {
+  calculateSMA(data: number[], period: number): number[] {
     const result: number[] = [];
     for (let i = 0; i < data.length; i++) {
       if (i < period - 1) {
@@ -394,5 +547,22 @@ export class BacktestEngine {
     }
 
     return maxDrawdown;
+  }
+
+  private calculateSharpeRatio(returns: number[], riskFreeRate: number = 0): number {
+    if (returns.length < 2) return 0;
+    
+    const meanReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    
+    if (stdDev === 0) return 0;
+    
+    // Annualize Sharpe Ratio (assuming daily returns, 252 trading days per year)
+    const annualizedReturn = meanReturn * 252;
+    const annualizedStdDev = stdDev * Math.sqrt(252);
+    const annualizedRiskFreeRate = riskFreeRate;
+    
+    return (annualizedReturn - annualizedRiskFreeRate) / annualizedStdDev;
   }
 }

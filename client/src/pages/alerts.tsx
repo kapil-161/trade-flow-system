@@ -2,7 +2,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Bell, BellOff, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { Bell, BellOff, TrendingUp, TrendingDown, AlertTriangle, Activity, Trash2 } from "lucide-react";
 
 interface Alert {
   id: string;
@@ -111,5 +111,3 @@ export default function Alerts() {
     </DashboardLayout>
   );
 }
-
-import { Activity, Trash2 } from "lucide-react";

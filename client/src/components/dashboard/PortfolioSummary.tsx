@@ -46,7 +46,7 @@ export function PortfolioSummary() {
     },
     { 
       label: "Sharpe Ratio", 
-      value: stats?.sharpeRatio.toFixed(2) || "0.00", 
+      value: (stats?.sharpeRatio ?? 0).toFixed(2), 
       change: "Good",
       icon: Percent, 
       trend: "up" as "up" | "down"

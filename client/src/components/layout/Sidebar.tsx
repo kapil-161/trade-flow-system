@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, LogOut, Menu, Activity, ArrowUpRight } from "lucide-react";
+import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, LogOut, Menu, Activity, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-
+import { usePortfolioStats } from "@/lib/api";
 import { Zap } from "lucide-react";
 
 const navItems = [
@@ -18,6 +18,7 @@ const navItems = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const { data: stats } = usePortfolioStats();
 
   const NavContent = () => (
     <div className="flex flex-col h-full py-4">
@@ -49,11 +50,22 @@ export function Sidebar() {
       <div className="px-4 mt-auto">
         <div className="p-4 rounded-xl bg-card border border-border/50 mb-4">
           <p className="text-xs text-muted-foreground mb-2">Total Equity</p>
-          <p className="text-lg font-bold font-mono-nums tracking-tight">$125,840.50</p>
-          <div className="flex items-center gap-1 text-xs text-profit mt-1">
-            <ArrowUpRight className="h-3 w-3" />
-            <span>+1.2%</span>
-          </div>
+          <p className="text-lg font-bold font-mono-nums tracking-tight">
+            ${stats?.totalEquity?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+          </p>
+          {stats && stats.totalPnLPercent !== 0 && (
+            <div className={cn(
+              "flex items-center gap-1 text-xs mt-1",
+              stats.totalPnLPercent >= 0 ? "text-profit" : "text-loss"
+            )}>
+              {stats.totalPnLPercent >= 0 ? (
+                <ArrowUpRight className="h-3 w-3" />
+              ) : (
+                <ArrowDownRight className="h-3 w-3" />
+              )}
+              <span>{stats.totalPnLPercent >= 0 ? '+' : ''}{stats.totalPnLPercent.toFixed(2)}%</span>
+            </div>
+          )}
         </div>
         
         <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10">

@@ -9,7 +9,7 @@ class MarketDataCache {
   
   // Default TTL values (in milliseconds)
   private readonly QUOTE_TTL = 30 * 1000; // 30 seconds for price data
-  private readonly HISTORY_TTL = 5 * 60 * 1000; // 5 minutes for historical data
+  private readonly HISTORY_TTL = 2 * 60 * 1000; // 2 minutes for historical data (reduced to get today's data faster)
   private readonly BATCH_TTL = 30 * 1000; // 30 seconds for batch quotes
   
   // Rate limiting
@@ -183,14 +183,51 @@ class MarketDataCache {
       const timestamps = result.timestamp;
       const quotes = result.indicators.quote[0];
       
-      const history = timestamps.map((ts: number, i: number) => ({
-        date: new Date(ts * 1000).toISOString(),
-        open: quotes.open[i],
-        high: quotes.high[i],
-        low: quotes.low[i],
-        close: quotes.close[i],
-        volume: quotes.volume[i],
-      }));
+      // Get the current price from meta if available (for today's incomplete data)
+      const meta = result.meta;
+      const currentPrice = meta?.regularMarketPrice;
+      const currentTime = meta?.regularMarketTime;
+      
+      const history = timestamps.map((ts: number, i: number) => {
+        const candleDate = new Date(ts * 1000);
+        const isToday = candleDate.toDateString() === new Date().toDateString();
+        
+        // For today's data, use current price if close is null/undefined
+        let close = quotes.close[i];
+        if (isToday && (close == null || isNaN(close)) && currentPrice != null) {
+          close = currentPrice;
+        }
+        
+        return {
+          date: candleDate.toISOString(),
+          open: quotes.open[i] ?? close,
+          high: quotes.high[i] ?? close,
+          low: quotes.low[i] ?? close,
+          close: close,
+          volume: quotes.volume[i] ?? 0,
+        };
+      });
+      
+      // If today's data is not in the history, try to add it using current price
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const hasToday = history.some(h => {
+        const hDate = new Date(h.date);
+        hDate.setHours(0, 0, 0, 0);
+        return hDate.getTime() === today.getTime();
+      });
+      
+      if (!hasToday && currentPrice != null && currentTime != null) {
+        const todayDate = new Date(currentTime * 1000);
+        history.push({
+          date: todayDate.toISOString(),
+          open: meta?.regularMarketPrice ?? currentPrice,
+          high: meta?.regularMarketDayHigh ?? currentPrice,
+          low: meta?.regularMarketDayLow ?? currentPrice,
+          close: currentPrice,
+          volume: meta?.regularMarketVolume ?? 0,
+        });
+      }
       
       this.set(cacheKey, history, this.HISTORY_TTL);
       return history;

@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema } from "@shared/schema";
 import { z } from "zod";
 import { marketCache } from "./cache";
-import { BacktestEngine } from "./backtest";
+import { BacktestEngine, TechnicalIndicators } from "./backtest";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -83,11 +83,33 @@ export async function registerRoutes(
 
   // Batch scan endpoint
   app.post("/api/backtest/batch-scan", async (req, res) => {
-    const { symbols } = req.body;
-    
+    const { symbols, config, scanDate } = req.body;
+
     if (!symbols || !Array.isArray(symbols)) {
       return res.status(400).json({ error: "Symbols array is required" });
     }
+
+    // Parse scan date if provided (format: YYYY-MM-DD or ISO string)
+    let targetDate: Date | null = null;
+    if (scanDate) {
+      targetDate = new Date(scanDate);
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ error: "Invalid scan date format" });
+      }
+      // Set to end of day to include that day's data
+      targetDate.setHours(23, 59, 59, 999);
+    }
+
+    // Use provided config or defaults (matching backtest defaults)
+    const strategyConfig = config || {
+      emaFast: 21,
+      emaSlow: 50,
+      rsiLower: 45,
+      rsiUpper: 65,
+      scoreThreshold: 7,
+      trendFilter: true,
+      volatilityFilter: true,
+    };
 
     try {
       const engine = new BacktestEngine();
@@ -95,22 +117,146 @@ export async function registerRoutes(
         symbols.map(async (symbol) => {
           try {
             // Using 3mo instead of 1mo to ensure we have enough data (min 50 candles)
-            const result = await engine.runMultiFactorStrategy(symbol, "3mo", 10000);
-            const lastData = result.historicalData[result.historicalData.length - 1];
+            // If scanning a historical date, we need more data to ensure we have enough before that date
+            const range = targetDate ? "1y" : "3mo";
+            let history = await marketCache.getHistory(symbol, range, "1d");
+
+            // Filter history to only include data up to the target date
+            if (targetDate) {
+              history = history.filter((h: any) => {
+                const candleDate = new Date(h.date);
+                return candleDate <= targetDate!;
+              });
+            }
+
+            if (history.length < 50) {
+              return null;
+            }
+
+            const closes = history.map((h: any) => h.close);
+            const volumes = history.map((h: any) => h.volume);
+
+            // Filter out any invalid data points (null, undefined, or NaN)
+            const validIndices: number[] = [];
+            for (let i = 0; i < closes.length; i++) {
+              if (closes[i] != null && !isNaN(closes[i]) && volumes[i] != null && !isNaN(volumes[i])) {
+                validIndices.push(i);
+              }
+            }
+
+            // Need at least 50 valid data points
+            if (validIndices.length < 50) {
+              return null;
+            }
+
+            // Use only valid data points (maintain original indices for alignment)
+            const validCloses = validIndices.map(i => closes[i]);
+            const validVolumes = validIndices.map(i => volumes[i]);
+
+            // Need at least 200 data points for EMA200 if trend filter is enabled
+            const minDataPoints = strategyConfig.trendFilter ? 200 : Math.max(strategyConfig.emaSlow, 14);
+            if (validCloses.length < minDataPoints) {
+              return null;
+            }
+
+            // Calculate indicators using the configured parameters (matching backtest logic)
+            const emaFast = TechnicalIndicators.ema(validCloses, strategyConfig.emaFast);
+            const emaSlow = TechnicalIndicators.ema(validCloses, strategyConfig.emaSlow);
+            const ema200 = TechnicalIndicators.ema(validCloses, 200);
+            const rsi = TechnicalIndicators.rsi(validCloses, 14);
+            const macd = engine.calculateMACD(validCloses);
             
-            // Calculate real-time score for the last candle
+            // Create candles array for ATR calculation
+            const candles = validIndices.map((idx, i) => ({
+              date: history[idx]?.date || new Date().toISOString(),
+              open: history[idx]?.open ?? validCloses[i],
+              high: history[idx]?.high ?? validCloses[i],
+              low: history[idx]?.low ?? validCloses[i],
+              close: validCloses[i],
+              volume: validVolumes[i],
+            }));
+            const atr = TechnicalIndicators.atr(candles, 14);
+            const avgVolume = engine.calculateSMA(validVolumes, 20);
+
+            const lastIndex = validCloses.length - 1;
+            const lastClose = validCloses[lastIndex];
+            const lastEmaFast = emaFast[lastIndex];
+            const lastEmaSlow = emaSlow[lastIndex];
+            const lastEma200 = ema200[lastIndex];
+            const lastRsi = rsi[lastIndex];
+            const lastVolume = validVolumes[lastIndex];
+            const lastAvgVolume = avgVolume[lastIndex];
+            const lastMacdHistogram = macd.histogram[lastIndex];
+            const prevMacdHistogram = macd.histogram[lastIndex - 1];
+            const lastATR = atr[lastIndex];
+            const prevATR = atr[lastIndex - 1];
+
+            // Validate that we have valid indicator values (check for NaN)
+            if (isNaN(lastEmaFast) || isNaN(lastEmaSlow) || isNaN(lastRsi) || isNaN(lastClose)) {
+              return null;
+            }
+
+            // Apply trend filter: Price MUST be above 200 EMA for long-term health
+            if (strategyConfig.trendFilter && !isNaN(lastEma200) && lastClose < lastEma200) {
+              return null; // Skip if below 200 EMA
+            }
+
+            // Apply volatility filter: Don't signal if volatility is too low
+            if (strategyConfig.volatilityFilter && lastIndex > 0 && 
+                !isNaN(lastATR) && !isNaN(prevATR) && lastATR < prevATR * 0.8) {
+              return null; // Skip if volatility dropped too much
+            }
+
+            // RSI Overbought/Oversold Filter: Don't signal buy if RSI is too high (overbought)
+            // RSI above 70 is typically overbought and should not trigger buy signals
+            if (lastRsi > 70) {
+              return {
+                symbol,
+                signal: "hold",
+                price: lastClose,
+                emaFast: lastEmaFast,
+                emaSlow: lastEmaSlow,
+                rsi: lastRsi,
+                score: 0,
+                rsiDivergence: "none",
+                volumeDivergence: "none",
+              };
+            }
+
+            // Calculate real-time score using the SAME logic as backtest
             let score = 0;
-            if (lastData.close > lastData.emaFast && lastData.emaFast > lastData.emaSlow) score += 3;
-            if (lastData.rsi >= 40 && lastData.rsi <= 70) score += 2;
-            
+
+            // 1. EMA Trend (3 points)
+            if (lastClose > lastEmaFast && lastEmaFast > lastEmaSlow) {
+              score += 3;
+            }
+
+            // 2. Volume Confirmation (2 points) - using actual volume vs average
+            if (!isNaN(lastVolume) && !isNaN(lastAvgVolume) && lastVolume > lastAvgVolume * 1.2) {
+              score += 2;
+            }
+
+            // 3. RSI Pullback zone (2 points) - only if RSI is in the sweet spot
+            if (lastRsi >= strategyConfig.rsiLower && lastRsi <= strategyConfig.rsiUpper) {
+              score += 2;
+            }
+
+            // 4. MACD Momentum (2 points)
+            if (!isNaN(lastMacdHistogram) && !isNaN(prevMacdHistogram) && 
+                lastMacdHistogram > 0 && lastMacdHistogram > prevMacdHistogram) {
+              score += 2;
+            }
+
             return {
               symbol,
-              signal: lastData.signal || (score >= 5 ? "buy" : "hold"),
-              price: lastData.close,
-              emaFast: lastData.emaFast,
-              emaSlow: lastData.emaSlow,
-              rsi: lastData.rsi,
-              score: Math.min(10, score + 2),
+              signal: score >= strategyConfig.scoreThreshold ? "buy" : "hold",
+              price: lastClose,
+              emaFast: lastEmaFast,
+              emaSlow: lastEmaSlow,
+              rsi: lastRsi,
+              score: Math.min(10, score), // Max score is 9, cap at 10 for display
+              rsiDivergence: "none", // Keep for backward compatibility but not used in scoring
+              volumeDivergence: "none", // Keep for backward compatibility but not used in scoring
             };
           } catch (e) {
             console.error(`Failed to scan ${symbol}:`, e);
@@ -119,7 +265,10 @@ export async function registerRoutes(
         })
       );
 
-      res.json(results.filter(Boolean));
+      res.json({
+        results: results.filter(Boolean),
+        scanDate: targetDate ? targetDate.toISOString() : new Date().toISOString(),
+      });
     } catch (error) {
       console.error("Error in batch scan:", error);
       res.status(500).json({ error: "Batch scan failed" });
@@ -284,15 +433,56 @@ export async function registerRoutes(
     }
   });
 
+  // Helper function to calculate Sharpe Ratio
+  function calculateSharpeRatio(
+    returns: number[], 
+    riskFreeRate: number = 0,
+    periodsPerYear: number = 252
+  ): number {
+    if (returns.length < 2) return 0;
+    
+    const meanReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    
+    if (stdDev === 0) return 0;
+    
+    // Annualize Sharpe Ratio
+    const annualizedReturn = meanReturn * periodsPerYear;
+    const annualizedStdDev = stdDev * Math.sqrt(periodsPerYear);
+    const annualizedRiskFreeRate = riskFreeRate;
+    
+    return (annualizedReturn - annualizedRiskFreeRate) / annualizedStdDev;
+  }
+
   // Portfolio analytics with caching
   app.get("/api/portfolio/stats", async (req, res) => {
     try {
       const holdings = await storage.getAllHoldings();
       const trades = await storage.getAllTrades();
-      
+
       // Get current prices for all holdings using cache
       const symbols = holdings.map(h => h.symbol);
-      const quotes = await marketCache.getMultiQuotes(symbols);
+      let quotes: Array<{ symbol: string; price: number }> = [];
+      
+      try {
+        if (symbols.length > 0) {
+          // Add timeout to prevent hanging
+          const quotesPromise = marketCache.getMultiQuotes(symbols);
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error("Market data fetch timeout")), 10000)
+          );
+          quotes = await Promise.race([quotesPromise, timeoutPromise]);
+        }
+      } catch (error) {
+        console.error("Error fetching market quotes:", error);
+        // Continue with empty quotes - will use 0 as fallback price
+        // Use holdings' avgPrice as fallback
+        quotes = holdings.map(h => ({
+          symbol: h.symbol,
+          price: parseFloat(h.avgPrice)
+        }));
+      }
 
       const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
 
@@ -304,7 +494,7 @@ export async function registerRoutes(
         const currentPrice = priceMap[holding.symbol] || 0;
         const quantity = parseFloat(holding.quantity);
         const avgPrice = parseFloat(holding.avgPrice);
-        
+
         totalEquity += quantity * currentPrice;
         totalCost += quantity * avgPrice;
       });
@@ -323,17 +513,250 @@ export async function registerRoutes(
       });
       const winRate = filledTrades.length > 0 ? (winningTrades.length / filledTrades.length) * 100 : 0;
 
+      // Calculate Sharpe Ratio from trade history
+      let sharpeRatio = 0;
+      try {
+        if (filledTrades.length > 1 && totalCost > 0) {
+          // Sort trades by date
+          const sortedTrades = [...filledTrades].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          
+          // Group trades by date (daily)
+          const tradesByDate = new Map<string, typeof sortedTrades>();
+          sortedTrades.forEach(trade => {
+            const date = new Date(trade.createdAt).toISOString().split('T')[0];
+            if (!tradesByDate.has(date)) {
+              tradesByDate.set(date, []);
+            }
+            tradesByDate.get(date)!.push(trade);
+          });
+          
+          // Track portfolio value over time
+          const portfolioValues: Array<{ date: string; value: number }> = [];
+          const holdingsBySymbol = new Map<string, { quantity: number; avgPrice: number }>();
+          let portfolioCost = 0; // Track total cost basis
+          
+          // Process trades chronologically and track portfolio value
+          const sortedDates = Array.from(tradesByDate.keys()).sort();
+          
+          sortedDates.forEach(date => {
+            const dayTrades = tradesByDate.get(date)!;
+            
+            // Process trades for this day
+            dayTrades.forEach(trade => {
+              const quantity = parseFloat(trade.quantity);
+              const price = parseFloat(trade.price);
+              const symbol = trade.symbol;
+              
+              if (trade.side === "buy") {
+                const existing = holdingsBySymbol.get(symbol) || { quantity: 0, avgPrice: 0 };
+                const totalCost = existing.quantity * existing.avgPrice + quantity * price;
+                const totalQuantity = existing.quantity + quantity;
+                holdingsBySymbol.set(symbol, {
+                  quantity: totalQuantity,
+                  avgPrice: totalQuantity > 0 ? totalCost / totalQuantity : price
+                });
+                portfolioCost += quantity * price;
+              } else {
+                const holding = holdingsBySymbol.get(symbol);
+                if (holding && holding.quantity > 0) {
+                  const soldQuantity = Math.min(quantity, holding.quantity);
+                  portfolioCost -= soldQuantity * holding.avgPrice;
+                  holding.quantity -= soldQuantity;
+                  if (holding.quantity === 0) {
+                    holdingsBySymbol.delete(symbol);
+                  } else {
+                    holdingsBySymbol.set(symbol, holding);
+                  }
+                }
+              }
+            });
+            
+            // Calculate portfolio value at end of day using current prices
+            let dayValue = portfolioCost; // Start with cost basis
+            holdingsBySymbol.forEach((holding, symbol) => {
+              const currentPrice = priceMap[symbol] || holding.avgPrice;
+              dayValue += holding.quantity * (currentPrice - holding.avgPrice); // Add unrealized P&L
+            });
+            
+            portfolioValues.push({ date, value: Math.max(0, dayValue) });
+          });
+          
+          // Add current portfolio value as final data point
+          if (portfolioValues.length > 0) {
+            portfolioValues.push({ date: new Date().toISOString().split('T')[0], value: totalEquity });
+          }
+          
+          // Calculate daily returns
+          const dailyReturns: number[] = [];
+          for (let i = 1; i < portfolioValues.length; i++) {
+            const prevValue = portfolioValues[i - 1].value;
+            const currentValue = portfolioValues[i].value;
+            if (prevValue > 0) {
+              const dailyReturn = (currentValue - prevValue) / prevValue;
+              dailyReturns.push(dailyReturn);
+            }
+          }
+          
+          // Calculate Sharpe Ratio (annualized from daily returns)
+          if (dailyReturns.length >= 2) {
+            sharpeRatio = calculateSharpeRatio(dailyReturns, 0, 252); // 252 trading days per year
+          }
+        }
+      } catch (error) {
+        console.error("Error calculating Sharpe Ratio:", error);
+        sharpeRatio = 0; // Fallback to 0 on error
+      }
+
       res.json({
         totalEquity,
         totalPnL,
         totalPnLPercent,
         winRate,
         totalTrades: filledTrades.length,
-        sharpeRatio: 2.1, // Placeholder - requires historical return data for accurate calculation
+        sharpeRatio,
       });
     } catch (error) {
       console.error("Error calculating portfolio stats:", error);
       res.status(500).json({ error: "Failed to calculate portfolio stats" });
+    }
+  });
+
+  // Export portfolio to CSV or JSON
+  app.get("/api/portfolio/export", async (req, res) => {
+    try {
+      const { format = "csv" } = req.query;
+      const holdings = await storage.getAllHoldings();
+      const trades = await storage.getAllTrades();
+
+      if (format === "csv") {
+        // Export holdings as CSV
+        const csvHeader = "Symbol,Name,Type,Quantity,Avg Price,Created At\n";
+        const csvRows = holdings.map(h =>
+          `${h.symbol},${h.name},${h.type},${h.quantity},${h.avgPrice},${h.createdAt}`
+        ).join("\n");
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename=portfolio_${Date.now()}.csv`);
+        res.send(csvHeader + csvRows);
+      } else {
+        // Export as JSON with both holdings and trades
+        const exportData = {
+          exportedAt: new Date().toISOString(),
+          holdings,
+          trades,
+        };
+
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", `attachment; filename=portfolio_${Date.now()}.json`);
+        res.json(exportData);
+      }
+    } catch (error) {
+      console.error("Error exporting portfolio:", error);
+      res.status(500).json({ error: "Failed to export portfolio" });
+    }
+  });
+
+  // Import portfolio from CSV or JSON
+  app.post("/api/portfolio/import", async (req, res) => {
+    try {
+      const { data, format = "json", replaceExisting = false } = req.body;
+
+      if (!data) {
+        return res.status(400).json({ error: "Import data is required" });
+      }
+
+      let importedHoldings = [];
+      let importedTrades = [];
+
+      if (format === "csv") {
+        // Parse CSV data
+        const lines = data.trim().split("\n");
+        const headers = lines[0].toLowerCase().split(",");
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(",");
+          const holding: any = {};
+
+          headers.forEach((header: string, index: number) => {
+            holding[header.trim()] = values[index]?.trim();
+          });
+
+          // Validate and add holding
+          if (holding.symbol && holding.quantity && holding.avgprice) {
+            importedHoldings.push({
+              symbol: holding.symbol,
+              name: holding.name || holding.symbol,
+              type: holding.type || "stock",
+              quantity: holding.quantity,
+              avgPrice: holding.avgprice || holding["avg price"],
+            });
+          }
+        }
+      } else {
+        // Parse JSON data
+        const parsed = typeof data === "string" ? JSON.parse(data) : data;
+        importedHoldings = parsed.holdings || [];
+        importedTrades = parsed.trades || [];
+      }
+
+      // Clear existing data if requested
+      if (replaceExisting) {
+        const existingHoldings = await storage.getAllHoldings();
+        await Promise.all(existingHoldings.map(h => storage.deleteHolding(h.id)));
+      }
+
+      // Import holdings
+      const createdHoldings = await Promise.all(
+        importedHoldings.map(async (holding: any) => {
+          try {
+            const validatedData = insertHoldingSchema.parse({
+              symbol: holding.symbol,
+              name: holding.name,
+              type: holding.type,
+              quantity: holding.quantity.toString(),
+              avgPrice: holding.avgPrice.toString(),
+            });
+            return await storage.createHolding(validatedData);
+          } catch (error) {
+            console.error(`Failed to import holding ${holding.symbol}:`, error);
+            return null;
+          }
+        })
+      );
+
+      // Import trades if present
+      const createdTrades = await Promise.all(
+        importedTrades.map(async (trade: any) => {
+          try {
+            const validatedData = insertTradeSchema.parse({
+              symbol: trade.symbol,
+              side: trade.side,
+              quantity: trade.quantity.toString(),
+              price: trade.price.toString(),
+              totalValue: trade.totalValue.toString(),
+              fees: trade.fees?.toString() || "0",
+              status: trade.status || "filled",
+            });
+            return await storage.createTrade(validatedData);
+          } catch (error) {
+            console.error(`Failed to import trade:`, error);
+            return null;
+          }
+        })
+      );
+
+      res.json({
+        success: true,
+        imported: {
+          holdings: createdHoldings.filter(Boolean).length,
+          trades: createdTrades.filter(Boolean).length,
+        },
+      });
+    } catch (error) {
+      console.error("Error importing portfolio:", error);
+      res.status(500).json({ error: "Failed to import portfolio" });
     }
   });
 

@@ -6,7 +6,7 @@ export const MARKET_SECTORS = {
   HEALTHCARE: ["LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE"],
   CONSUMER: ["AMZN", "WMT", "COST", "HD", "PG", "KO", "PEP"],
   INDICES: ["^GSPC", "^NDX", "^DJI", "^RUT"],
-  NEW_PICKS: ["DHI", "CISS", "LRCX", "NVDA", "HNGE", "TSM", "FIG", "BLSH", "GEMI", "FIGR", "KLAR", "VIA", "STUB", "PTRN", "FRMI", "META", "MSFT", "SLV", "NAVN", "NOK", "GLOO", "RAMP", "DRI", "AVAV", "AVGO", "RTX", "GPUS", "NFLX", "CINT", "TOO"]
+  NEW_PICKS: ["DHI", "CISS", "LRCX", "HNGE", "TSM", "FIG", "BLSH", "GEMI", "FIGR", "KLAR", "VIA", "STUB", "PTRN", "FRMI", "SLV", "NAVN", "NOK", "GLOO", "RAMP", "DRI", "AVAV", "RTX", "GPUS", "NFLX", "CINT", "TOO"]
 };
 
 export const ALL_SYMBOLS = Object.values(MARKET_SECTORS).flat();
