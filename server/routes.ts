@@ -1090,7 +1090,14 @@ export async function registerRoutes(
       }
 
       const { sendTestEmail } = await import("./email");
-      await sendTestEmail(email);
+      
+      // Set a timeout for the entire operation (35 seconds)
+      const sendPromise = sendTestEmail(email);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Request timed out. The email sending operation took too long.")), 35000);
+      });
+
+      await Promise.race([sendPromise, timeoutPromise]);
 
       res.json({ message: "Test email sent successfully" });
     } catch (error: any) {

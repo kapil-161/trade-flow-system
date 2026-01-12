@@ -50,12 +50,19 @@ async function getTransporter(): Promise<nodemailer.Transporter | null> {
 
   // Check if config changed, recreate transporter if needed
   const configKey = JSON.stringify(emailConfig);
-  if (transporterConfig !== configKey) {
+  if (transporterConfig !== configKey || !transporter) {
     transporter = nodemailer.createTransport({
       host: emailConfig.host,
       port: emailConfig.port,
       secure: emailConfig.secure,
       auth: emailConfig.auth,
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000, // 10 seconds
+      socketTimeout: 10000, // 10 seconds
+      // For TLS
+      tls: {
+        rejectUnauthorized: false, // Allow self-signed certificates
+      },
     });
     transporterConfig = configKey;
   }
@@ -220,6 +227,14 @@ export async function sendTestEmail(toEmail: string): Promise<boolean> {
     throw new Error("SMTP not configured. Please configure SMTP settings first.");
   }
 
+  // Verify connection before sending
+  try {
+    await mailTransporter.verify();
+  } catch (error: any) {
+    console.error("SMTP connection verification failed:", error);
+    throw new Error(`SMTP connection failed: ${error.message || "Unable to connect to SMTP server. Please check your settings."}`);
+  }
+
   const emailConfig = await getEmailConfig();
   const fromEmail = emailConfig.auth.user;
 
@@ -282,11 +297,29 @@ SMTP Settings:
   };
 
   try {
-    await mailTransporter.sendMail(mailOptions);
+    // Set a timeout for sending email (30 seconds)
+    const sendPromise = mailTransporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Email sending timed out after 30 seconds. Check your SMTP settings and network connection.")), 30000);
+    });
+
+    await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✓ Test email sent to ${toEmail}`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error sending test email:", error);
+    
+    // Provide more helpful error messages
+    if (error.message?.includes("timeout")) {
+      throw new Error("Connection timeout. Check your SMTP host, port, and network connection.");
+    } else if (error.code === "EAUTH") {
+      throw new Error("Authentication failed. Please check your SMTP username and password.");
+    } else if (error.code === "ECONNECTION") {
+      throw new Error("Could not connect to SMTP server. Check your SMTP host and port settings.");
+    } else if (error.code === "ETIMEDOUT") {
+      throw new Error("Connection timed out. The SMTP server may be unreachable or your network is blocking the connection.");
+    }
+    
     throw error;
   }
 }
