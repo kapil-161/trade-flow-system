@@ -1299,6 +1299,34 @@ export async function registerRoutes(
   // Global predictor cache (in-memory for simplicity, can be persisted)
   const predictorCache = new Map<string, any>();
 
+  // Test TensorFlow.js initialization
+  app.get("/api/ml/test", requireAuth, async (req, res) => {
+    try {
+      console.log("Testing TensorFlow.js initialization...");
+      const tf = await import("@tensorflow/tfjs-node");
+      await tf.ready();
+      
+      // Test basic tensor operations
+      const testTensor = tf.tensor2d([[1, 2], [3, 4]]);
+      const result = testTensor.sum().dataSync()[0];
+      testTensor.dispose();
+      
+      res.json({
+        success: true,
+        message: "TensorFlow.js is working",
+        version: tf.version,
+        testResult: result,
+      });
+    } catch (error: any) {
+      console.error("TensorFlow.js test failed:", error);
+      res.status(500).json({
+        error: "TensorFlow.js initialization failed",
+        details: error.message || error.toString(),
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      });
+    }
+  });
+
   // Train ML model for a symbol
   app.post("/api/ml/train", requireAuth, async (req, res) => {
     try {

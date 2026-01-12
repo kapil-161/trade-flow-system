@@ -66,8 +66,18 @@ export default function MLPredictionPage() {
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Training failed");
+        let errorMessage = "Training failed";
+        try {
+          const error = await res.json();
+          errorMessage = error.error || error.message || `Server error: ${res.status} ${res.statusText}`;
+          // Include details if available (in development)
+          if (error.details && process.env.NODE_ENV === "development") {
+            console.error("Training error details:", error.details);
+          }
+        } catch (e) {
+          errorMessage = `Server error: ${res.status} ${res.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
       return res.json();
     },
@@ -80,6 +90,7 @@ export default function MLPredictionPage() {
       setTrainSymbol("");
     },
     onError: (error: Error) => {
+      console.error("Training error:", error);
       toast({
         title: "Training Failed",
         description: error.message,
