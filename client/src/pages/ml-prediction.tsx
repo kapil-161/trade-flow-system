@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -221,7 +221,7 @@ export default function MLPredictionPage() {
   };
 
   return (
-    <MainLayout>
+    <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div>
@@ -571,6 +571,6 @@ export default function MLPredictionPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
+    </DashboardLayout>
   );
 }
