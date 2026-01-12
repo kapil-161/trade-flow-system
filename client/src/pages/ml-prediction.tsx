@@ -62,6 +62,35 @@ export default function MLPredictionPage() {
     queryKey: ["/api/ml/models"],
   });
 
+  // Check for active training on page load (for refresh recovery)
+  useEffect(() => {
+    const checkActiveTraining = async () => {
+      // Check if we have a training symbol in localStorage (from previous session)
+      const lastTrainingSymbol = localStorage.getItem('lastTrainingSymbol');
+      if (lastTrainingSymbol) {
+        try {
+          const res = await fetch(`/api/ml/training-status/${lastTrainingSymbol}`, {
+            credentials: "include",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.isTraining || data.logs.length > 0) {
+              setIsTraining(true);
+              setTrainingSymbol(data.symbol);
+              setTrainingLogs(data.logs);
+            } else {
+              localStorage.removeItem('lastTrainingSymbol');
+            }
+          }
+        } catch (error) {
+          console.error("Error checking training status:", error);
+        }
+      }
+    };
+
+    checkActiveTraining();
+  }, []);
+
   // Setup WebSocket for training logs
   useEffect(() => {
     if (!isTraining || !trainingSymbol) {
@@ -120,9 +149,12 @@ export default function MLPredictionPage() {
   // Train model mutation
   const trainMutation = useMutation({
     mutationFn: async (data: { symbol: string; range: string; epochs: number }) => {
+      const symbolUpper = data.symbol.toUpperCase();
       setIsTraining(true);
-      setTrainingSymbol(data.symbol.toUpperCase());
+      setTrainingSymbol(symbolUpper);
       setTrainingLogs([]);
+      // Store in localStorage for refresh recovery
+      localStorage.setItem('lastTrainingSymbol', symbolUpper);
       
       const res = await fetch("/api/ml/train", {
         method: "POST",
@@ -149,6 +181,7 @@ export default function MLPredictionPage() {
     onSuccess: (data) => {
       setIsTraining(false);
       setTrainingSymbol(null);
+      localStorage.removeItem('lastTrainingSymbol');
       toast({
         title: "Training Complete!",
         description: `Model for ${data.symbol} trained successfully. R²: ${data.metrics.r2.toFixed(4)}`,
@@ -159,6 +192,7 @@ export default function MLPredictionPage() {
     onError: (error: Error) => {
       setIsTraining(false);
       setTrainingSymbol(null);
+      localStorage.removeItem('lastTrainingSymbol');
       console.error("Training error:", error);
       toast({
         title: "Training Failed",
@@ -565,6 +599,7 @@ export default function MLPredictionPage() {
                             setIsTraining(false);
                             setTrainingSymbol(null);
                             setTrainingLogs([]);
+                            localStorage.removeItem('lastTrainingSymbol');
                           }}
                         >
                           <X className="h-4 w-4" />

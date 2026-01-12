@@ -1301,6 +1301,8 @@ export async function registerRoutes(
   const predictorCache = new Map<string, any>();
   // Training lock to prevent concurrent training for the same symbol
   const trainingLocks = new Map<string, Promise<any>>();
+  // Training logs storage (in-memory, cleared after training completes)
+  const trainingLogs = new Map<string, Array<{ message: string; type: string; timestamp: string }>>();
 
   // Initialize model storage
   await modelStorage.init();
@@ -1411,9 +1413,24 @@ export async function registerRoutes(
       // Dynamic import to avoid loading TensorFlow on startup
       const { StockPredictor } = await import("./stock-predictor");
 
-      // Create logger function to broadcast logs via WebSocket
+      // Initialize training logs for this symbol
+      trainingLogs.set(symbolUpper, []);
+
+      // Create logger function to broadcast logs via WebSocket and store them
       const trainingLogger = (message: string, type: 'info' | 'success' | 'error' | 'progress' = 'info') => {
         console.log(message);
+        const logEntry = {
+          message,
+          type,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Store log
+        const logs = trainingLogs.get(symbolUpper) || [];
+        logs.push(logEntry);
+        trainingLogs.set(symbolUpper, logs);
+        
+        // Broadcast via WebSocket
         wsInstance.broadcastTrainingLog(symbolUpper, message, type);
       };
 
@@ -1454,6 +1471,10 @@ export async function registerRoutes(
         } finally {
           // Remove lock when done
           trainingLocks.delete(symbolUpper);
+          // Keep logs for 5 minutes after training completes (for refresh recovery)
+          setTimeout(() => {
+            trainingLogs.delete(symbolUpper);
+          }, 5 * 60 * 1000);
         }
       })();
 
@@ -1471,7 +1492,19 @@ export async function registerRoutes(
       const symbolUpper = req.body.symbol?.toUpperCase();
       if (symbolUpper) {
         trainingLocks.delete(symbolUpper);
-        wsInstance.broadcastTrainingLog(symbolUpper, `❌ Training failed: ${error?.message || 'Unknown error'}`, 'error');
+        const errorLog = {
+          message: `❌ Training failed: ${error?.message || 'Unknown error'}`,
+          type: 'error',
+          timestamp: new Date().toISOString()
+        };
+        const logs = trainingLogs.get(symbolUpper) || [];
+        logs.push(errorLog);
+        trainingLogs.set(symbolUpper, logs);
+        wsInstance.broadcastTrainingLog(symbolUpper, errorLog.message, 'error');
+        // Clear logs after 5 minutes
+        setTimeout(() => {
+          trainingLogs.delete(symbolUpper);
+        }, 5 * 60 * 1000);
       }
       console.error("Error training ML model:", error);
       const errorMessage = error?.message || error?.toString() || "Failed to train ML model";
@@ -1479,6 +1512,26 @@ export async function registerRoutes(
         error: errorMessage,
         details: process.env.NODE_ENV === "development" ? error.stack : undefined
       });
+    }
+  });
+
+  // Get training status and logs (for recovery after page refresh)
+  app.get("/api/ml/training-status/:symbol", requireAuth, async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const symbolUpper = symbol.toUpperCase();
+      
+      const isTraining = trainingLocks.has(symbolUpper);
+      const logs = trainingLogs.get(symbolUpper) || [];
+      
+      res.json({
+        symbol: symbolUpper,
+        isTraining,
+        logs
+      });
+    } catch (error: any) {
+      console.error("Error getting training status:", error);
+      res.status(500).json({ error: "Failed to get training status" });
     }
   });
 
