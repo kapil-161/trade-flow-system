@@ -68,6 +68,17 @@ export class StockPredictor {
     console.log(`\n🚀 Training ML Predictor for ${symbol}`);
     console.log('='.repeat(60));
 
+    // Initialize TensorFlow.js backend
+    try {
+      const tf = await import('@tensorflow/tfjs-node');
+      // Ensure TensorFlow is ready
+      await tf.ready();
+      console.log('✓ TensorFlow.js initialized');
+    } catch (error: any) {
+      console.error('Failed to initialize TensorFlow.js:', error);
+      throw new Error(`TensorFlow.js initialization failed: ${error.message || error}`);
+    }
+
     // Step 1: Fetch historical data
     console.log('📊 Fetching historical data...');
     const history = await marketCache.getHistory(symbol, range, '1d');
