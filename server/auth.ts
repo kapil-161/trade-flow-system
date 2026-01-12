@@ -33,33 +33,52 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   });
 }
 
-export function setupAuth(app: Express) {
+export async function setupAuth(app: Express) {
   // Session configuration with PostgreSQL store
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  let sessionStore: any;
   try {
-    const sessionStore = new PgStore({
+    // Test database connection first
+    const client = await pool.connect();
+    client.release();
+    
+    sessionStore = new PgStore({
       pool: pool,
       tableName: "session",
       createTableIfMissing: true,
     });
 
-    app.use(
-      session({
-        secret: process.env.SESSION_SECRET || "trade-flow-secret-key-change-in-production",
-        resave: false,
-        saveUninitialized: false,
-        store: sessionStore,
-        cookie: {
-          secure: process.env.NODE_ENV === "production",
-          httpOnly: true,
-          maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
-          sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
-        },
-      })
-    );
+    // Handle store errors gracefully
+    if (sessionStore && typeof sessionStore.on === "function") {
+      sessionStore.on("error", (error: Error) => {
+        console.error("Session store error:", error);
+      });
+    }
+    
+    console.log("Session store initialized successfully");
   } catch (error) {
     console.error("Failed to initialize session store:", error);
-    throw error;
+    // Don't throw - allow app to start but sessions won't persist
+    console.warn("Continuing without persistent session store - sessions will be in-memory only");
+    sessionStore = undefined; // Use default MemoryStore
   }
+
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "trade-flow-secret-key-change-in-production",
+      resave: false,
+      saveUninitialized: false,
+      store: sessionStore,
+      cookie: {
+        // Secure cookies in production (Render uses HTTPS)
+        secure: isProduction,
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        sameSite: "lax",
+      },
+    })
+  );
 
   app.use(passport.initialize());
   app.use(passport.session());

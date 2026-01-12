@@ -27,9 +27,6 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// Setup authentication before routes
-setupAuth(app);
-
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -68,6 +65,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Setup authentication before routes
+  try {
+    await setupAuth(app);
+  } catch (error) {
+    console.error("Failed to setup auth:", error);
+    // Continue anyway - auth routes will fail but app won't crash
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
