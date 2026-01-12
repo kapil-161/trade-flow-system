@@ -402,8 +402,11 @@ export class LSTMPriceModel {
     this.numFeatures = numFeatures;
   }
 
-  build(): void {
+  async build(): Promise<void> {
     try {
+      // Ensure TensorFlow.js is ready before building
+      await tf.ready();
+      
       const input = tf.input({ shape: [this.sequenceLength, this.numFeatures] });
 
       // LSTM layers matching Python architecture
@@ -447,7 +450,7 @@ export class LSTMPriceModel {
     yVal: number[],
     epochs: number = 80
   ): Promise<void> {
-    if (!this.model) this.build();
+    if (!this.model) await this.build();
 
     const xTrainTensor = tf.tensor3d(XTrain);
     const yTrainTensor = tf.tensor2d(yTrain, [yTrain.length, 1]);
@@ -507,34 +510,42 @@ export class LSTMDirectionModel {
     this.numFeatures = numFeatures;
   }
 
-  build(): void {
-    const input = tf.input({ shape: [this.sequenceLength, this.numFeatures] });
+  async build(): Promise<void> {
+    try {
+      // Ensure TensorFlow.js is ready before building
+      await tf.ready();
+      
+      const input = tf.input({ shape: [this.sequenceLength, this.numFeatures] });
 
-    let x = tf.layers.lstm({
-      units: 12,
-      returnSequences: true,
-      dropout: 0.2,
-      recurrentDropout: 0.2
-    }).apply(input) as tf.SymbolicTensor;
+      let x = tf.layers.lstm({
+        units: 12,
+        returnSequences: true,
+        dropout: 0.2,
+        recurrentDropout: 0.2
+      }).apply(input) as tf.SymbolicTensor;
 
-    x = tf.layers.lstm({
-      units: 4,
-      dropout: 0.2,
-      recurrentDropout: 0.2
-    }).apply(x) as tf.SymbolicTensor;
+      x = tf.layers.lstm({
+        units: 4,
+        dropout: 0.2,
+        recurrentDropout: 0.2
+      }).apply(x) as tf.SymbolicTensor;
 
-    x = tf.layers.dense({ units: 6, activation: 'relu' }).apply(x) as tf.SymbolicTensor;
-    x = tf.layers.dropout({ rate: 0.3 }).apply(x) as tf.SymbolicTensor;
-    const output = tf.layers.dense({ units: 3, activation: 'softmax' }).apply(x) as tf.SymbolicTensor;
+      x = tf.layers.dense({ units: 6, activation: 'relu' }).apply(x) as tf.SymbolicTensor;
+      x = tf.layers.dropout({ rate: 0.3 }).apply(x) as tf.SymbolicTensor;
+      const output = tf.layers.dense({ units: 3, activation: 'softmax' }).apply(x) as tf.SymbolicTensor;
 
-    this.model = tf.model({ inputs: input, outputs: output });
+      this.model = tf.model({ inputs: input, outputs: output });
 
-    // Categorical crossentropy for classification
-    this.model.compile({
-      optimizer: tf.train.adamax(0.001),
-      loss: 'categoricalCrossentropy',
-      metrics: ['accuracy']
-    });
+      // Categorical crossentropy for classification
+      this.model.compile({
+        optimizer: tf.train.adamax(0.001),
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
+      });
+    } catch (error: any) {
+      console.error('Error building LSTM direction model:', error);
+      throw new Error(`Failed to build direction model: ${error.message || error}`);
+    }
   }
 
   async train(
@@ -544,7 +555,7 @@ export class LSTMDirectionModel {
     yVal: number[][],
     epochs: number = 40
   ): Promise<void> {
-    if (!this.model) this.build();
+    if (!this.model) await this.build();
 
     const xTrainTensor = tf.tensor3d(XTrain);
     const yTrainTensor = tf.tensor2d(yTrain);
