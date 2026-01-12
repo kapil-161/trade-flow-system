@@ -37,19 +37,30 @@ class MarketDataCache {
     });
   }
   
-  // Rate-limited fetch wrapper
+  // Rate-limited fetch wrapper with proper headers
   async rateLimitedFetch(url: string): Promise<Response> {
     const now = Date.now();
     const timeSinceLastFetch = now - this.lastFetchTime;
-    
+
     if (timeSinceLastFetch < this.MIN_FETCH_INTERVAL) {
-      await new Promise(resolve => 
+      await new Promise(resolve =>
         setTimeout(resolve, this.MIN_FETCH_INTERVAL - timeSinceLastFetch)
       );
     }
-    
+
     this.lastFetchTime = Date.now();
-    return fetch(url);
+
+    // Add browser-like headers to avoid being blocked
+    return fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://finance.yahoo.com',
+        'Origin': 'https://finance.yahoo.com',
+      },
+    });
   }
   
   // Get quote with caching
