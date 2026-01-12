@@ -128,16 +128,3 @@ export async function migrateUserIdColumns() {
     client.release();
   }
 }
-
-// Run migration if called directly
-if (require.main === module) {
-  migrateUserIdColumns()
-    .then(() => {
-      console.log("Migration script completed");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("Migration script failed:", error);
-      process.exit(1);
-    });
-}
