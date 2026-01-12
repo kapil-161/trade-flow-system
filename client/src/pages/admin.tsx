@@ -318,11 +318,20 @@ function SMTPConfigSection() {
 
   const saveSettings = useMutation({
     mutationFn: async () => {
+      // If password is empty but settings are already configured, use a placeholder
+      // The backend will keep the existing password if we send empty string
+      const settingsToSave = {
+        ...smtpSettings,
+        // Only send password if it's been entered (not empty)
+        // If empty and already configured, backend should keep existing password
+        password: smtpSettings.password || (currentSettings?.configured ? "KEEP_EXISTING" : ""),
+      };
+      
       const response = await fetch("/api/admin/smtp-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(smtpSettings),
+        body: JSON.stringify(settingsToSave),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -481,7 +490,17 @@ function SMTPConfigSection() {
         <div className="flex gap-2">
           <Button
             onClick={() => saveSettings.mutate()}
-            disabled={saveSettings.isPending || !smtpSettings.host || !smtpSettings.user || !smtpSettings.password}
+            disabled={
+              saveSettings.isPending || 
+              !smtpSettings.host || 
+              !smtpSettings.user || 
+              (!smtpSettings.password && !currentSettings?.configured)
+            }
+            title={
+              !smtpSettings.password && !currentSettings?.configured
+                ? "Password is required for new SMTP configuration"
+                : undefined
+            }
           >
             {saveSettings.isPending ? (
               <>

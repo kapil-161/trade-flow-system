@@ -1045,15 +1045,25 @@ export async function registerRoutes(
     try {
       const { host, port, secure, user, password } = req.body;
 
-      if (!host || !port || !user || !password) {
-        return res.status(400).json({ error: "Host, port, user, and password are required" });
+      if (!host || !port || !user) {
+        return res.status(400).json({ error: "Host, port, and user are required" });
+      }
+
+      // Check if password should be kept (special value) or if it's a new password
+      const existingPassword = await storage.getSetting("smtp_password");
+      const passwordToSave = password === "KEEP_EXISTING" && existingPassword?.value 
+        ? existingPassword.value 
+        : password;
+
+      if (!passwordToSave) {
+        return res.status(400).json({ error: "Password is required for new configurations" });
       }
 
       await storage.setSetting("smtp_host", host);
       await storage.setSetting("smtp_port", String(port));
       await storage.setSetting("smtp_secure", secure ? "true" : "false");
       await storage.setSetting("smtp_user", user);
-      await storage.setSetting("smtp_password", password);
+      await storage.setSetting("smtp_password", passwordToSave);
 
       // Clear transporter cache to force reload
       // This is handled in email.ts by checking config changes
