@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { MoreVertical, Edit2, Trash2, Trash, ArrowUpCircle, ArrowDownCircle, Minus } from "lucide-react";
@@ -188,104 +189,124 @@ export function ActivePositions() {
             {cryptoHoldings.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Cryptocurrencies</h3>
-                <div className="space-y-3">
-                  {cryptoHoldings.map((holding) => {
-                    const currentPrice = priceMap[holding.symbol] || 0;
-                    const quantity = parseFloat(holding.quantity);
-                    const avgPrice = parseFloat(holding.avgPrice);
-                    const value = quantity * currentPrice;
-                    const cost = quantity * avgPrice;
-                    const pnl = value - cost;
-                    const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
+                <div className="rounded-md border border-border/50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[120px]">Symbol</TableHead>
+                        <TableHead className="w-[100px]">Quantity</TableHead>
+                        <TableHead className="w-[120px]">Current Price</TableHead>
+                        <TableHead className="w-[120px]">Signal</TableHead>
+                        <TableHead className="w-[100px] text-right">P&L ($)</TableHead>
+                        <TableHead className="w-[100px] text-right">P&L (%)</TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cryptoHoldings.map((holding) => {
+                        const currentPrice = priceMap[holding.symbol] || 0;
+                        const quantity = parseFloat(holding.quantity);
+                        const avgPrice = parseFloat(holding.avgPrice);
+                        const value = quantity * currentPrice;
+                        const cost = quantity * avgPrice;
+                        const pnl = value - cost;
+                        const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
-                    // Lookup scanner signal (case-insensitive)
-                    const scannerSignal = scannerSignals[holding.symbol.toUpperCase()] || scannerSignals[holding.symbol];
-                    
-                    return (
-                      <div 
-                        key={holding.id} 
-                        className="flex items-center justify-between py-2 border-b border-border/40 group hover:bg-white/5 transition-colors"
-                        data-testid={`row-holding-${holding.symbol}`}
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
-                            {holding.symbol}
-                          </div>
-                          {signalsLoading ? (
-                            <Badge variant="secondary" className="text-xs font-medium gap-1 opacity-50">
-                              <Minus className="h-3 w-3 animate-pulse" />
-                              Loading...
-                            </Badge>
-                          ) : scannerSignal ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge
-                                    variant={
-                                      scannerSignal.signal === "buy" ? "default" :
-                                      scannerSignal.signal === "sell" ? "destructive" : "secondary"
-                                    }
-                                    className={cn(
-                                      "text-xs font-medium gap-1 cursor-help",
-                                      scannerSignal.signal === "buy" && "bg-blue-500/20 text-blue-400 border-blue-500/30",
-                                      scannerSignal.signal === "sell" && "bg-red-500/20 text-red-400 border-red-500/30",
-                                      scannerSignal.signal === "hold" && "bg-muted text-muted-foreground"
-                                    )}
+                        // Lookup scanner signal (case-insensitive)
+                        const scannerSignal = scannerSignals[holding.symbol.toUpperCase()] || scannerSignals[holding.symbol];
+                        
+                        return (
+                          <TableRow 
+                            key={holding.id} 
+                            className="group"
+                            data-testid={`row-holding-${holding.symbol}`}
+                          >
+                            <TableCell className="font-semibold" data-testid={`text-symbol-${holding.symbol}`}>
+                              {holding.symbol}
+                            </TableCell>
+                            <TableCell className="font-mono-nums text-sm text-muted-foreground">
+                              {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
+                            </TableCell>
+                            <TableCell className="font-mono-nums text-sm">
+                              {currentPrice > 0 ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              {signalsLoading ? (
+                                <Badge variant="secondary" className="text-xs font-medium gap-1 opacity-50">
+                                  <Minus className="h-3 w-3 animate-pulse" />
+                                  Loading...
+                                </Badge>
+                              ) : scannerSignal ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant={
+                                          scannerSignal.signal === "buy" ? "default" :
+                                          scannerSignal.signal === "sell" ? "destructive" : "secondary"
+                                        }
+                                        className={cn(
+                                          "text-xs font-medium gap-1 cursor-help",
+                                          scannerSignal.signal === "buy" && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                          scannerSignal.signal === "sell" && "bg-red-500/20 text-red-400 border-red-500/30",
+                                          scannerSignal.signal === "hold" && "bg-muted text-muted-foreground"
+                                        )}
+                                      >
+                                        {scannerSignal.signal === "buy" && <ArrowUpCircle className="h-3 w-3" />}
+                                        {scannerSignal.signal === "sell" && <ArrowDownCircle className="h-3 w-3" />}
+                                        {scannerSignal.signal === "hold" && <Minus className="h-3 w-3" />}
+                                        {scannerSignal.signal.toUpperCase()}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <div className="space-y-1 text-xs">
+                                        <div className="font-semibold">Scanner Signal: {scannerSignal.signal.toUpperCase()}</div>
+                                        <div>Score: {scannerSignal.score}/10</div>
+                                        <div>RSI: {scannerSignal.rsi.toFixed(1)}</div>
+                                        <div>EMA Trend: {scannerSignal.emaFast > scannerSignal.emaSlow ? "Bullish" : "Bearish"}</div>
+                                        <div className="text-muted-foreground mt-1 pt-1 border-t border-border/50">
+                                          Based on latest market scanner analysis
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className={cn("font-mono-nums text-sm text-right", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
+                              {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                            </TableCell>
+                            <TableCell className={cn("font-mono-nums text-sm text-right", pnl >= 0 ? "text-profit" : "text-loss")}>
+                              {pnl >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-holding-actions-${holding.symbol}`}>
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
+                                    <Edit2 className="h-4 w-4" /> Edit Position
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDelete(holding.id, holding.symbol)} 
+                                    className="gap-2 text-loss focus:text-loss"
+                                    data-testid={`menu-delete-${holding.symbol}`}
                                   >
-                                    {scannerSignal.signal === "buy" && <ArrowUpCircle className="h-3 w-3" />}
-                                    {scannerSignal.signal === "sell" && <ArrowDownCircle className="h-3 w-3" />}
-                                    {scannerSignal.signal === "hold" && <Minus className="h-3 w-3" />}
-                                    {scannerSignal.signal.toUpperCase()}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs">
-                                  <div className="space-y-1 text-xs">
-                                    <div className="font-semibold">Scanner Signal: {scannerSignal.signal.toUpperCase()}</div>
-                                    <div>Score: {scannerSignal.score}/10</div>
-                                    <div>RSI: {scannerSignal.rsi.toFixed(1)}</div>
-                                    <div>EMA Trend: {scannerSignal.emaFast > scannerSignal.emaSlow ? "Bullish" : "Bearish"}</div>
-                                    <div className="text-muted-foreground mt-1 pt-1 border-t border-border/50">
-                                      Based on latest market scanner analysis
-                                    </div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : null}
-                          <div className="text-sm text-muted-foreground font-mono-nums">
-                            {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-holding-actions-${holding.symbol}`}>
-                                <MoreVertical className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
-                                <Edit2 className="h-4 w-4" /> Edit Position
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleDelete(holding.id, holding.symbol)} 
-                                className="gap-2 text-loss focus:text-loss"
-                                data-testid={`menu-delete-${holding.symbol}`}
-                              >
-                                <Trash2 className="h-4 w-4" /> Remove Position
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        <div className="flex items-center gap-6">
-                          <div className={cn("font-mono-nums text-sm", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
-                            {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
-                          </div>
-                          <div className={cn("font-mono-nums text-sm w-16 text-right", pnl >= 0 ? "text-profit" : "text-loss")}>
-                            {pnl >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                                    <Trash2 className="h-4 w-4" /> Remove Position
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
@@ -294,104 +315,124 @@ export function ActivePositions() {
             {stockHoldings.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Stocks</h3>
-                <div className="space-y-3">
-                  {stockHoldings.map((holding) => {
-                    const currentPrice = priceMap[holding.symbol] || 0;
-                    const quantity = parseFloat(holding.quantity);
-                    const avgPrice = parseFloat(holding.avgPrice);
-                    const value = quantity * currentPrice;
-                    const cost = quantity * avgPrice;
-                    const pnl = value - cost;
-                    const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
+                <div className="rounded-md border border-border/50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[120px]">Symbol</TableHead>
+                        <TableHead className="w-[100px]">Quantity</TableHead>
+                        <TableHead className="w-[120px]">Current Price</TableHead>
+                        <TableHead className="w-[120px]">Signal</TableHead>
+                        <TableHead className="w-[100px] text-right">P&L ($)</TableHead>
+                        <TableHead className="w-[100px] text-right">P&L (%)</TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stockHoldings.map((holding) => {
+                        const currentPrice = priceMap[holding.symbol] || 0;
+                        const quantity = parseFloat(holding.quantity);
+                        const avgPrice = parseFloat(holding.avgPrice);
+                        const value = quantity * currentPrice;
+                        const cost = quantity * avgPrice;
+                        const pnl = value - cost;
+                        const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
-                    // Lookup scanner signal (case-insensitive)
-                    const scannerSignal = scannerSignals[holding.symbol.toUpperCase()] || scannerSignals[holding.symbol];
-                    
-                    return (
-                      <div 
-                        key={holding.id} 
-                        className="flex items-center justify-between py-2 border-b border-border/40 group hover:bg-white/5 transition-colors"
-                        data-testid={`row-holding-${holding.symbol}`}
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="font-semibold text-base" data-testid={`text-symbol-${holding.symbol}`}>
-                            {holding.symbol}
-                          </div>
-                          {signalsLoading ? (
-                            <Badge variant="secondary" className="text-xs font-medium gap-1 opacity-50">
-                              <Minus className="h-3 w-3 animate-pulse" />
-                              Loading...
-                            </Badge>
-                          ) : scannerSignal ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge
-                                    variant={
-                                      scannerSignal.signal === "buy" ? "default" :
-                                      scannerSignal.signal === "sell" ? "destructive" : "secondary"
-                                    }
-                                    className={cn(
-                                      "text-xs font-medium gap-1 cursor-help",
-                                      scannerSignal.signal === "buy" && "bg-blue-500/20 text-blue-400 border-blue-500/30",
-                                      scannerSignal.signal === "sell" && "bg-red-500/20 text-red-400 border-red-500/30",
-                                      scannerSignal.signal === "hold" && "bg-muted text-muted-foreground"
-                                    )}
+                        // Lookup scanner signal (case-insensitive)
+                        const scannerSignal = scannerSignals[holding.symbol.toUpperCase()] || scannerSignals[holding.symbol];
+                        
+                        return (
+                          <TableRow 
+                            key={holding.id} 
+                            className="group"
+                            data-testid={`row-holding-${holding.symbol}`}
+                          >
+                            <TableCell className="font-semibold" data-testid={`text-symbol-${holding.symbol}`}>
+                              {holding.symbol}
+                            </TableCell>
+                            <TableCell className="font-mono-nums text-sm text-muted-foreground">
+                              {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} shares
+                            </TableCell>
+                            <TableCell className="font-mono-nums text-sm">
+                              {currentPrice > 0 ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              {signalsLoading ? (
+                                <Badge variant="secondary" className="text-xs font-medium gap-1 opacity-50">
+                                  <Minus className="h-3 w-3 animate-pulse" />
+                                  Loading...
+                                </Badge>
+                              ) : scannerSignal ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant={
+                                          scannerSignal.signal === "buy" ? "default" :
+                                          scannerSignal.signal === "sell" ? "destructive" : "secondary"
+                                        }
+                                        className={cn(
+                                          "text-xs font-medium gap-1 cursor-help",
+                                          scannerSignal.signal === "buy" && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                          scannerSignal.signal === "sell" && "bg-red-500/20 text-red-400 border-red-500/30",
+                                          scannerSignal.signal === "hold" && "bg-muted text-muted-foreground"
+                                        )}
+                                      >
+                                        {scannerSignal.signal === "buy" && <ArrowUpCircle className="h-3 w-3" />}
+                                        {scannerSignal.signal === "sell" && <ArrowDownCircle className="h-3 w-3" />}
+                                        {scannerSignal.signal === "hold" && <Minus className="h-3 w-3" />}
+                                        {scannerSignal.signal.toUpperCase()}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <div className="space-y-1 text-xs">
+                                        <div className="font-semibold">Scanner Signal: {scannerSignal.signal.toUpperCase()}</div>
+                                        <div>Score: {scannerSignal.score}/10</div>
+                                        <div>RSI: {scannerSignal.rsi.toFixed(1)}</div>
+                                        <div>EMA Trend: {scannerSignal.emaFast > scannerSignal.emaSlow ? "Bullish" : "Bearish"}</div>
+                                        <div className="text-muted-foreground mt-1 pt-1 border-t border-border/50">
+                                          Based on latest market scanner analysis
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className={cn("font-mono-nums text-sm text-right", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
+                              {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                            </TableCell>
+                            <TableCell className={cn("font-mono-nums text-sm text-right", pnl >= 0 ? "text-profit" : "text-loss")}>
+                              {pnl >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-holding-actions-${holding.symbol}`}>
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
+                                    <Edit2 className="h-4 w-4" /> Edit Position
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDelete(holding.id, holding.symbol)} 
+                                    className="gap-2 text-loss focus:text-loss"
+                                    data-testid={`menu-delete-${holding.symbol}`}
                                   >
-                                    {scannerSignal.signal === "buy" && <ArrowUpCircle className="h-3 w-3" />}
-                                    {scannerSignal.signal === "sell" && <ArrowDownCircle className="h-3 w-3" />}
-                                    {scannerSignal.signal === "hold" && <Minus className="h-3 w-3" />}
-                                    {scannerSignal.signal.toUpperCase()}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs">
-                                  <div className="space-y-1 text-xs">
-                                    <div className="font-semibold">Scanner Signal: {scannerSignal.signal.toUpperCase()}</div>
-                                    <div>Score: {scannerSignal.score}/10</div>
-                                    <div>RSI: {scannerSignal.rsi.toFixed(1)}</div>
-                                    <div>EMA Trend: {scannerSignal.emaFast > scannerSignal.emaSlow ? "Bullish" : "Bearish"}</div>
-                                    <div className="text-muted-foreground mt-1 pt-1 border-t border-border/50">
-                                      Based on latest market scanner analysis
-                                    </div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : null}
-                          <div className="text-sm text-muted-foreground font-mono-nums">
-                            {quantity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} shares
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-holding-actions-${holding.symbol}`}>
-                                <MoreVertical className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEdit(holding)} className="gap-2" data-testid={`menu-edit-${holding.symbol}`}>
-                                <Edit2 className="h-4 w-4" /> Edit Position
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleDelete(holding.id, holding.symbol)} 
-                                className="gap-2 text-loss focus:text-loss"
-                                data-testid={`menu-delete-${holding.symbol}`}
-                              >
-                                <Trash2 className="h-4 w-4" /> Remove Position
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        <div className="flex items-center gap-6">
-                          <div className={cn("font-mono-nums text-sm", pnl >= 0 ? "text-profit" : "text-loss")} data-testid={`text-pnl-${holding.symbol}`}>
-                            {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
-                          </div>
-                          <div className={cn("font-mono-nums text-sm w-16 text-right", pnl >= 0 ? "text-profit" : "text-loss")}>
-                            {pnl >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                                    <Trash2 className="h-4 w-4" /> Remove Position
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
