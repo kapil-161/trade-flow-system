@@ -1,3 +1,5 @@
+import { persistentCache } from "./persistent-cache";
+
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
@@ -6,35 +8,55 @@ interface CacheEntry<T> {
 
 class MarketDataCache {
   private cache: Map<string, CacheEntry<any>> = new Map();
-  
-  // Default TTL values (in milliseconds)
-  private readonly QUOTE_TTL = 30 * 1000; // 30 seconds for price data
-  private readonly HISTORY_TTL = 2 * 60 * 1000; // 2 minutes for historical data (reduced to get today's data faster)
-  private readonly BATCH_TTL = 30 * 1000; // 30 seconds for batch quotes
-  
-  // Rate limiting
+
+  // Extended TTL values (in milliseconds) - more aggressive caching to reduce API calls
+  private readonly QUOTE_TTL = 5 * 60 * 1000; // 5 minutes for real-time quotes (was 30s)
+  private readonly HISTORY_TTL = 2 * 60 * 60 * 1000; // 2 hours for historical data (was 2 min)
+  private readonly BATCH_TTL = 5 * 60 * 1000; // 5 minutes for batch quotes (was 30s)
+
+  // Rate limiting - increased to avoid hitting Yahoo Finance limits
   private lastFetchTime: number = 0;
-  private readonly MIN_FETCH_INTERVAL = 1000; // Minimum 1 second between fetches
+  private readonly MIN_FETCH_INTERVAL = 2000; // Minimum 2 seconds between fetches (was 1s)
   
   get<T>(key: string): T | null {
+    // Check in-memory cache first (faster)
     const entry = this.cache.get(key);
-    if (!entry) return null;
-    
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return null;
+    if (entry) {
+      if (Date.now() > entry.expiresAt) {
+        this.cache.delete(key);
+        return null;
+      }
+      return entry.data as T;
     }
-    
-    return entry.data as T;
+
+    // Check persistent cache (survives restarts)
+    const persistent = persistentCache.get<T>(key);
+    if (persistent) {
+      // Copy to memory cache for faster access
+      this.cache.set(key, {
+        data: persistent,
+        timestamp: Date.now(),
+        expiresAt: Date.now() + this.QUOTE_TTL,
+      });
+      return persistent;
+    }
+
+    return null;
   }
   
   set<T>(key: string, data: T, ttlMs?: number): void {
     const now = Date.now();
+    const ttl = ttlMs || this.QUOTE_TTL;
+
+    // Store in both memory and persistent cache
     this.cache.set(key, {
       data,
       timestamp: now,
-      expiresAt: now + (ttlMs || this.QUOTE_TTL),
+      expiresAt: now + ttl,
     });
+
+    // Also save to persistent cache for long-term storage
+    persistentCache.set(key, data, ttl);
   }
   
   // Rate-limited fetch wrapper with proper headers
