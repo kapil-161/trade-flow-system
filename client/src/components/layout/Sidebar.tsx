@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, LogOut, Menu, Activity, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, LogOut, Menu, Activity, ArrowUpRight, ArrowDownRight, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -7,20 +7,21 @@ import { usePortfolioStats } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Zap } from "lucide-react";
 
-const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: LineChart, label: "Market Scanner", href: "/market" },
-  { icon: PieChart, label: "Portfolio", href: "/portfolio" },
-  { icon: History, label: "History", href: "/history" },
-  { icon: Zap, label: "Backtest", href: "/backtest" },
-  { icon: Bell, label: "Alerts", href: "/alerts" },
-  { icon: Settings, label: "Settings", href: "/settings" },
-];
-
 export function Sidebar() {
   const [location] = useLocation();
   const { data: stats } = usePortfolioStats();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+
+  const navItems = [
+    { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+    { icon: LineChart, label: "Market Scanner", href: "/market" },
+    { icon: PieChart, label: "Portfolio", href: "/portfolio" },
+    { icon: History, label: "History", href: "/history" },
+    { icon: Zap, label: "Backtest", href: "/backtest" },
+    { icon: Bell, label: "Alerts", href: "/alerts" },
+    { icon: Settings, label: "Settings", href: "/settings" },
+    ...(user?.isAdmin ? [{ icon: Shield, label: "Admin", href: "/admin" }] : []),
+  ];
 
   const NavContent = () => (
     <div className="flex flex-col h-full py-4">

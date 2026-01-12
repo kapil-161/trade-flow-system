@@ -162,6 +162,7 @@ export async function setupAuth(app: Express) {
       const user = await storage.createUser({
         username,
         password: hashedPassword,
+        isAdmin: "false",
       });
 
       // Log in the user automatically
@@ -203,6 +204,7 @@ export async function setupAuth(app: Express) {
         res.json({
           id: user.id,
           username: user.username,
+          isAdmin: user.isAdmin === "true",
         });
       });
     })(req, res, next);
@@ -223,11 +225,26 @@ export async function setupAuth(app: Express) {
       res.json({
         id: user.id,
         username: user.username,
+        isAdmin: user.isAdmin === "true",
       });
     } else {
       res.status(401).json({ error: "Not authenticated" });
     }
   });
+}
+
+// Middleware to require admin access
+export function requireAdmin(req: any, res: any, next: any) {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  
+  const user = req.user as User;
+  if (user.isAdmin !== "true") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  
+  next();
 }
 
 // Middleware to protect routes

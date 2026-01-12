@@ -5,6 +5,7 @@ import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema } from "@
 import { z } from "zod";
 import { marketCache } from "./cache";
 import { BacktestEngine, TechnicalIndicators } from "./backtest";
+import { requireAdmin } from "./auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -769,6 +770,75 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error importing portfolio:", error);
       res.status(500).json({ error: "Failed to import portfolio" });
+    }
+  });
+
+  // Admin routes
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      // Don't send passwords
+      const users = allUsers.map(({ password, ...user }) => ({
+        ...user,
+        isAdmin: user.isAdmin === "true",
+      }));
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isAdmin } = req.body;
+      
+      const updatedUser = await storage.updateUser(id, {
+        isAdmin: isAdmin ? "true" : "false",
+      });
+      
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json({
+        ...updatedUser,
+        isAdmin: updatedUser.isAdmin === "true",
+      });
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.get("/api/admin/stats", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const holdings = await storage.getAllHoldings();
+      const trades = await storage.getAllTrades();
+      const watchlist = await storage.getAllWatchlist();
+      
+      res.json({
+        users: {
+          total: users.length,
+          admins: users.filter(u => u.isAdmin === "true").length,
+        },
+        holdings: {
+          total: holdings.length,
+          uniqueSymbols: new Set(holdings.map(h => h.symbol)).size,
+        },
+        trades: {
+          total: trades.length,
+          filled: trades.filter(t => t.status === "filled").length,
+        },
+        watchlist: {
+          total: watchlist.length,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ error: "Failed to fetch admin stats" });
     }
   });
 

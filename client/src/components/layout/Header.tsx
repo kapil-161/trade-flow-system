@@ -1,25 +1,26 @@
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, Activity, LogOut } from "lucide-react";
+import { LayoutDashboard, LineChart, PieChart, History, Settings, Bell, Activity, LogOut, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { usePortfolioStats } from "@/lib/api";
 import { Zap } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
-const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: LineChart, label: "Scanner", href: "/market" },
-  { icon: PieChart, label: "Portfolio", href: "/portfolio" },
-  { icon: History, label: "History", href: "/history" },
-  { icon: Zap, label: "Backtest", href: "/backtest" },
-  { icon: Bell, label: "Alerts", href: "/alerts" },
-  { icon: Settings, label: "Settings", href: "/settings" },
-];
-
 export function Header() {
   const [location] = useLocation();
   const { data: stats } = usePortfolioStats();
   const { user, logout } = useAuth();
+
+  const navItems = [
+    { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+    { icon: LineChart, label: "Scanner", href: "/market" },
+    { icon: PieChart, label: "Portfolio", href: "/portfolio" },
+    { icon: History, label: "History", href: "/history" },
+    { icon: Zap, label: "Backtest", href: "/backtest" },
+    { icon: Bell, label: "Alerts", href: "/alerts" },
+    { icon: Settings, label: "Settings", href: "/settings" },
+    ...(user?.isAdmin ? [{ icon: Shield, label: "Admin", href: "/admin" }] : []),
+  ];
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-card/80 backdrop-blur-xl">
