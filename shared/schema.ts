@@ -22,6 +22,7 @@ export type User = typeof users.$inferSelect;
 // Holdings table - what assets the user owns
 export const holdings = pgTable("holdings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: text("symbol").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(), // "crypto" or "stock"
@@ -34,6 +35,7 @@ export const holdings = pgTable("holdings", {
 // Trades table - transaction history
 export const trades = pgTable("trades", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: text("symbol").notNull(),
   side: text("side").notNull(), // "buy" or "sell"
   quantity: decimal("quantity", { precision: 18, scale: 8 }).notNull(),
@@ -47,26 +49,30 @@ export const trades = pgTable("trades", {
 // Watchlist table - assets user is tracking
 export const watchlist = pgTable("watchlist", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: text("symbol").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Insert schemas
+// Insert schemas (userId will be set server-side from authenticated user)
 export const insertHoldingSchema = createInsertSchema(holdings).omit({
   id: true,
+  userId: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export const insertTradeSchema = createInsertSchema(trades).omit({
   id: true,
+  userId: true,
   createdAt: true,
 });
 
 export const insertWatchlistSchema = createInsertSchema(watchlist).omit({
   id: true,
+  userId: true,
   createdAt: true,
 });
 

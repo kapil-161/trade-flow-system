@@ -13,7 +13,7 @@ import {
   watchlist
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -25,23 +25,28 @@ export interface IStorage {
   updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
 
   // Holdings methods
-  getAllHoldings(): Promise<Holding[]>;
-  getHolding(id: string): Promise<Holding | undefined>;
-  getHoldingBySymbol(symbol: string): Promise<Holding | undefined>;
-  createHolding(holding: InsertHolding): Promise<Holding>;
-  updateHolding(id: string, holding: Partial<InsertHolding>): Promise<Holding | undefined>;
-  deleteHolding(id: string): Promise<void>;
+  getAllHoldings(userId: string): Promise<Holding[]>;
+  getHolding(id: string, userId: string): Promise<Holding | undefined>;
+  getHoldingBySymbol(symbol: string, userId: string): Promise<Holding | undefined>;
+  createHolding(holding: InsertHolding & { userId: string }): Promise<Holding>;
+  updateHolding(id: string, userId: string, holding: Partial<InsertHolding>): Promise<Holding | undefined>;
+  deleteHolding(id: string, userId: string): Promise<void>;
 
   // Trade methods
-  getAllTrades(): Promise<Trade[]>;
-  getTrade(id: string): Promise<Trade | undefined>;
-  createTrade(trade: InsertTrade): Promise<Trade>;
-  getTradesBySymbol(symbol: string): Promise<Trade[]>;
+  getAllTrades(userId: string): Promise<Trade[]>;
+  getTrade(id: string, userId: string): Promise<Trade | undefined>;
+  createTrade(trade: InsertTrade & { userId: string }): Promise<Trade>;
+  getTradesBySymbol(symbol: string, userId: string): Promise<Trade[]>;
 
   // Watchlist methods
-  getAllWatchlist(): Promise<Watchlist[]>;
-  addToWatchlist(item: InsertWatchlist): Promise<Watchlist>;
-  removeFromWatchlist(id: string): Promise<void>;
+  getAllWatchlist(userId: string): Promise<Watchlist[]>;
+  addToWatchlist(item: InsertWatchlist & { userId: string }): Promise<Watchlist>;
+  removeFromWatchlist(id: string, userId: string): Promise<void>;
+
+  // Admin methods - get all data across all users
+  getAllHoldingsForAdmin(): Promise<Holding[]>;
+  getAllTradesForAdmin(): Promise<Trade[]>;
+  getAllWatchlistForAdmin(): Promise<Watchlist[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -80,69 +85,103 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Holdings methods
-  async getAllHoldings(): Promise<Holding[]> {
-    return await db.select().from(holdings);
+  async getAllHoldings(userId: string): Promise<Holding[]> {
+    return await db.select().from(holdings).where(eq(holdings.userId, userId));
   }
 
-  async getHolding(id: string): Promise<Holding | undefined> {
-    const [holding] = await db.select().from(holdings).where(eq(holdings.id, id));
+  async getHolding(id: string, userId: string): Promise<Holding | undefined> {
+    const [holding] = await db
+      .select()
+      .from(holdings)
+      .where(and(eq(holdings.id, id), eq(holdings.userId, userId)));
     return holding || undefined;
   }
 
-  async getHoldingBySymbol(symbol: string): Promise<Holding | undefined> {
-    const [holding] = await db.select().from(holdings).where(eq(holdings.symbol, symbol));
+  async getHoldingBySymbol(symbol: string, userId: string): Promise<Holding | undefined> {
+    const [holding] = await db
+      .select()
+      .from(holdings)
+      .where(and(eq(holdings.symbol, symbol), eq(holdings.userId, userId)));
     return holding || undefined;
   }
 
-  async createHolding(insertHolding: InsertHolding): Promise<Holding> {
+  async createHolding(insertHolding: InsertHolding & { userId: string }): Promise<Holding> {
     const [holding] = await db.insert(holdings).values(insertHolding).returning();
     return holding;
   }
 
-  async updateHolding(id: string, updateData: Partial<InsertHolding>): Promise<Holding | undefined> {
+  async updateHolding(id: string, userId: string, updateData: Partial<InsertHolding>): Promise<Holding | undefined> {
     const [holding] = await db
       .update(holdings)
       .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(holdings.id, id))
+      .where(and(eq(holdings.id, id), eq(holdings.userId, userId)))
       .returning();
     return holding || undefined;
   }
 
-  async deleteHolding(id: string): Promise<void> {
-    await db.delete(holdings).where(eq(holdings.id, id));
+  async deleteHolding(id: string, userId: string): Promise<void> {
+    await db.delete(holdings).where(and(eq(holdings.id, id), eq(holdings.userId, userId)));
   }
 
   // Trade methods
-  async getAllTrades(): Promise<Trade[]> {
-    return await db.select().from(trades).orderBy(desc(trades.createdAt));
+  async getAllTrades(userId: string): Promise<Trade[]> {
+    return await db
+      .select()
+      .from(trades)
+      .where(eq(trades.userId, userId))
+      .orderBy(desc(trades.createdAt));
   }
 
-  async getTrade(id: string): Promise<Trade | undefined> {
-    const [trade] = await db.select().from(trades).where(eq(trades.id, id));
+  async getTrade(id: string, userId: string): Promise<Trade | undefined> {
+    const [trade] = await db
+      .select()
+      .from(trades)
+      .where(and(eq(trades.id, id), eq(trades.userId, userId)));
     return trade || undefined;
   }
 
-  async createTrade(insertTrade: InsertTrade): Promise<Trade> {
+  async createTrade(insertTrade: InsertTrade & { userId: string }): Promise<Trade> {
     const [trade] = await db.insert(trades).values(insertTrade).returning();
     return trade;
   }
 
-  async getTradesBySymbol(symbol: string): Promise<Trade[]> {
-    return await db.select().from(trades).where(eq(trades.symbol, symbol)).orderBy(desc(trades.createdAt));
+  async getTradesBySymbol(symbol: string, userId: string): Promise<Trade[]> {
+    return await db
+      .select()
+      .from(trades)
+      .where(and(eq(trades.symbol, symbol), eq(trades.userId, userId)))
+      .orderBy(desc(trades.createdAt));
   }
 
   // Watchlist methods
-  async getAllWatchlist(): Promise<Watchlist[]> {
-    return await db.select().from(watchlist).orderBy(desc(watchlist.createdAt));
+  async getAllWatchlist(userId: string): Promise<Watchlist[]> {
+    return await db
+      .select()
+      .from(watchlist)
+      .where(eq(watchlist.userId, userId))
+      .orderBy(desc(watchlist.createdAt));
   }
 
-  async addToWatchlist(insertWatchlist: InsertWatchlist): Promise<Watchlist> {
+  async addToWatchlist(insertWatchlist: InsertWatchlist & { userId: string }): Promise<Watchlist> {
     const [item] = await db.insert(watchlist).values(insertWatchlist).returning();
     return item;
   }
 
-  async removeFromWatchlist(id: string): Promise<void> {
-    await db.delete(watchlist).where(eq(watchlist.id, id));
+  async removeFromWatchlist(id: string, userId: string): Promise<void> {
+    await db.delete(watchlist).where(and(eq(watchlist.id, id), eq(watchlist.userId, userId)));
+  }
+
+  // Admin methods - get all data across all users
+  async getAllHoldingsForAdmin(): Promise<Holding[]> {
+    return await db.select().from(holdings);
+  }
+
+  async getAllTradesForAdmin(): Promise<Trade[]> {
+    return await db.select().from(trades).orderBy(desc(trades.createdAt));
+  }
+
+  async getAllWatchlistForAdmin(): Promise<Watchlist[]> {
+    return await db.select().from(watchlist).orderBy(desc(watchlist.createdAt));
   }
 }
 

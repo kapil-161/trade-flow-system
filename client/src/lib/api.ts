@@ -29,6 +29,7 @@ export interface PortfolioStats {
   winRate: number;
   totalTrades: number;
   sharpeRatio: number;
+  maxDrawdown?: number;
 }
 
 // Market Data Hooks
@@ -36,7 +37,9 @@ export function useQuote(symbol: string) {
   return useQuery<Quote>({
     queryKey: ["quote", symbol],
     queryFn: async () => {
-      const response = await fetch(`/api/market/quote/${symbol}`);
+      const response = await fetch(`/api/market/quote/${symbol}`, {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch quote");
       return response.json();
     },
@@ -53,6 +56,7 @@ export function useMultiQuotes(symbols: string[]) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbols }),
+        credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch quotes");
       return response.json();
@@ -66,7 +70,9 @@ export function useHistoricalData(symbol: string, range = "1mo", interval = "1d"
   return useQuery<HistoricalData[]>({
     queryKey: ["history", symbol, range, interval],
     queryFn: async () => {
-      const response = await fetch(`/api/market/history/${symbol}?range=${range}&interval=${interval}`);
+      const response = await fetch(`/api/market/history/${symbol}?range=${range}&interval=${interval}`, {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch historical data");
       return response.json();
     },
@@ -79,7 +85,9 @@ export function useHoldings() {
   return useQuery<Holding[]>({
     queryKey: ["holdings"],
     queryFn: async () => {
-      const response = await fetch("/api/holdings");
+      const response = await fetch("/api/holdings", {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch holdings");
       return response.json();
     },
@@ -94,6 +102,7 @@ export function useCreateHolding() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(holding),
+        credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to create holding");
       return response.json();
@@ -113,6 +122,7 @@ export function useUpdateHolding() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to update holding");
       return response.json();
@@ -128,7 +138,10 @@ export function useDeleteHolding() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/holdings/${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/holdings/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to delete holding");
     },
     onSuccess: () => {
@@ -143,7 +156,9 @@ export function useTrades() {
   return useQuery<Trade[]>({
     queryKey: ["trades"],
     queryFn: async () => {
-      const response = await fetch("/api/trades");
+      const response = await fetch("/api/trades", {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch trades");
       return response.json();
     },
@@ -158,6 +173,7 @@ export function useCreateTrade() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(trade),
+        credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to create trade");
       return response.json();
@@ -175,7 +191,9 @@ export function useWatchlist() {
   return useQuery<Watchlist[]>({
     queryKey: ["watchlist"],
     queryFn: async () => {
-      const response = await fetch("/api/watchlist");
+      const response = await fetch("/api/watchlist", {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch watchlist");
       return response.json();
     },
@@ -190,6 +208,7 @@ export function useAddToWatchlist() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(item),
+        credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to add to watchlist");
       return response.json();
@@ -204,7 +223,10 @@ export function useRemoveFromWatchlist() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/watchlist/${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/watchlist/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to remove from watchlist");
     },
     onSuccess: () => {
@@ -218,7 +240,9 @@ export function usePortfolioStats() {
   return useQuery<PortfolioStats>({
     queryKey: ["portfolio-stats"],
     queryFn: async () => {
-      const response = await fetch("/api/portfolio/stats");
+      const response = await fetch("/api/portfolio/stats", {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch portfolio stats");
       return response.json();
     },

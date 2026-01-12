@@ -1,13 +1,27 @@
 import { db } from "./db";
-import { holdings, trades } from "@shared/schema";
+import { holdings, trades, users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Seeding database...");
 
   try {
+    // Get first user (or create a test user if none exists)
+    let [firstUser] = await db.select().from(users).limit(1);
+    
+    if (!firstUser) {
+      console.log("⚠ No users found. Seed script requires at least one user.");
+      console.log("   Please create a user first, then run the seed script.");
+      process.exit(1);
+    }
+
+    const userId = firstUser.id;
+    console.log(`✓ Using user ID: ${userId} (${firstUser.username})`);
+
     // Add sample holdings
     const sampleHoldings = [
       {
+        userId,
         symbol: "BTC-USD",
         name: "Bitcoin",
         type: "crypto",
@@ -15,6 +29,7 @@ async function seed() {
         avgPrice: "45000.00",
       },
       {
+        userId,
         symbol: "ETH-USD",
         name: "Ethereum",
         type: "crypto",
@@ -22,6 +37,7 @@ async function seed() {
         avgPrice: "2800.00",
       },
       {
+        userId,
         symbol: "NVDA",
         name: "NVIDIA Corporation",
         type: "stock",
@@ -29,6 +45,7 @@ async function seed() {
         avgPrice: "450.00",
       },
       {
+        userId,
         symbol: "TSLA",
         name: "Tesla Inc",
         type: "stock",
@@ -44,6 +61,7 @@ async function seed() {
     // Add sample trades
     const sampleTrades = [
       {
+        userId,
         symbol: "BTC-USD",
         side: "buy",
         quantity: "0.5",
@@ -53,6 +71,7 @@ async function seed() {
         status: "filled",
       },
       {
+        userId,
         symbol: "ETH-USD",
         side: "buy",
         quantity: "5.0",
@@ -62,6 +81,7 @@ async function seed() {
         status: "filled",
       },
       {
+        userId,
         symbol: "NVDA",
         side: "buy",
         quantity: "25",
@@ -71,6 +91,7 @@ async function seed() {
         status: "filled",
       },
       {
+        userId,
         symbol: "TSLA",
         side: "buy",
         quantity: "10",

@@ -244,7 +244,7 @@ class MarketDataCache {
       // If today's data is not in the history, try to add it using current price
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const hasToday = history.some(h => {
+      const hasToday = history.some((h: any) => {
         const hDate = new Date(h.date);
         hDate.setHours(0, 0, 0, 0);
         return hDate.getTime() === today.getTime();

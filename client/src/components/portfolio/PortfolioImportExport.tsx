@@ -24,7 +24,9 @@ export function ExportDialog() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const response = await fetch(`/api/portfolio/export?format=${format}`);
+      const response = await fetch(`/api/portfolio/export?format=${format}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error("Export failed");
@@ -178,6 +180,7 @@ export function ImportDialog() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
 
       if (!response.ok) {

@@ -5,7 +5,7 @@ import { insertHoldingSchema, insertTradeSchema, insertWatchlistSchema } from "@
 import { z } from "zod";
 import { marketCache } from "./cache";
 import { BacktestEngine, TechnicalIndicators } from "./backtest";
-import { requireAdmin } from "./auth";
+import { requireAdmin, requireAuth } from "./auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -15,8 +15,8 @@ export async function registerRoutes(
   app.get("/api/health", async (req, res) => {
     try {
       // Test database connection
-      await storage.getAllHoldings();
-      res.json({ status: "ok", database: "connected" });
+      const users = await storage.getAllUsers();
+      res.json({ status: "ok", database: "connected", users: users.length });
     } catch (error) {
       console.error("Health check failed:", error);
       res.status(503).json({ status: "error", database: "disconnected", error: String(error) });
@@ -337,9 +337,10 @@ export async function registerRoutes(
   });
 
   // Holdings CRUD
-  app.get("/api/holdings", async (req, res) => {
+  app.get("/api/holdings", requireAuth, async (req, res) => {
     try {
-      const holdings = await storage.getAllHoldings();
+      const user = req.user as any;
+      const holdings = await storage.getAllHoldings(user.id);
       res.json(holdings);
     } catch (error) {
       console.error("Error fetching holdings:", error);
@@ -347,10 +348,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/holdings", async (req, res) => {
+  app.post("/api/holdings", requireAuth, async (req, res) => {
     try {
+      const user = req.user as any;
       const validatedData = insertHoldingSchema.parse(req.body);
-      const holding = await storage.createHolding(validatedData);
+      const holding = await storage.createHolding({ ...validatedData, userId: user.id });
       res.status(201).json(holding);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -361,10 +363,11 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/holdings/:id", async (req, res) => {
+  app.patch("/api/holdings/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const holding = await storage.updateHolding(id, req.body);
+      const user = req.user as any;
+      const holding = await storage.updateHolding(id, user.id, req.body);
       
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
@@ -377,10 +380,11 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/holdings/:id", async (req, res) => {
+  app.delete("/api/holdings/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      await storage.deleteHolding(id);
+      const user = req.user as any;
+      await storage.deleteHolding(id, user.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting holding:", error);
@@ -389,9 +393,10 @@ export async function registerRoutes(
   });
 
   // Trades CRUD
-  app.get("/api/trades", async (req, res) => {
+  app.get("/api/trades", requireAuth, async (req, res) => {
     try {
-      const trades = await storage.getAllTrades();
+      const user = req.user as any;
+      const trades = await storage.getAllTrades(user.id);
       res.json(trades);
     } catch (error) {
       console.error("Error fetching trades:", error);
@@ -399,13 +404,14 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/trades", async (req, res) => {
+  app.post("/api/trades", requireAuth, async (req, res) => {
     try {
+      const user = req.user as any;
       const validatedData = insertTradeSchema.parse(req.body);
-      const trade = await storage.createTrade(validatedData);
+      const trade = await storage.createTrade({ ...validatedData, userId: user.id });
       
       // Update holdings when trade is executed
-      const existingHolding = await storage.getHoldingBySymbol(validatedData.symbol);
+      const existingHolding = await storage.getHoldingBySymbol(validatedData.symbol, user.id);
       
       if (validatedData.side === "buy") {
         if (existingHolding) {
@@ -416,7 +422,7 @@ export async function registerRoutes(
             (parseFloat(validatedData.quantity) * parseFloat(validatedData.price))
           ) / newQuantity;
           
-          await storage.updateHolding(existingHolding.id, {
+          await storage.updateHolding(existingHolding.id, user.id, {
             quantity: newQuantity.toString(),
             avgPrice: newAvgPrice.toFixed(2),
           });
@@ -426,6 +432,7 @@ export async function registerRoutes(
             const quote = await marketCache.getQuote(validatedData.symbol);
             
             await storage.createHolding({
+              userId: user.id,
               symbol: validatedData.symbol,
               name: quote.name || validatedData.symbol,
               type: validatedData.symbol.match(/^(BTC|ETH|SOL|DOGE|ADA|XRP|DOT|MATIC|LINK|UNI|AAVE|AVAX|ATOM|ALGO|VET|FIL|XLM|NEAR|APT|ARB|OP)/) ? "crypto" : "stock",
@@ -440,9 +447,9 @@ export async function registerRoutes(
         const newQuantity = parseFloat(existingHolding.quantity) - parseFloat(validatedData.quantity);
         
         if (newQuantity <= 0) {
-          await storage.deleteHolding(existingHolding.id);
+          await storage.deleteHolding(existingHolding.id, user.id);
         } else {
-          await storage.updateHolding(existingHolding.id, {
+          await storage.updateHolding(existingHolding.id, user.id, {
             quantity: newQuantity.toString(),
           });
         }
@@ -459,9 +466,10 @@ export async function registerRoutes(
   });
 
   // Watchlist CRUD
-  app.get("/api/watchlist", async (req, res) => {
+  app.get("/api/watchlist", requireAuth, async (req, res) => {
     try {
-      const watchlist = await storage.getAllWatchlist();
+      const user = req.user as any;
+      const watchlist = await storage.getAllWatchlist(user.id);
       res.json(watchlist);
     } catch (error) {
       console.error("Error fetching watchlist:", error);
@@ -469,10 +477,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/watchlist", async (req, res) => {
+  app.post("/api/watchlist", requireAuth, async (req, res) => {
     try {
+      const user = req.user as any;
       const validatedData = insertWatchlistSchema.parse(req.body);
-      const item = await storage.addToWatchlist(validatedData);
+      const item = await storage.addToWatchlist({ ...validatedData, userId: user.id });
       res.status(201).json(item);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -483,10 +492,11 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/watchlist/:id", async (req, res) => {
+  app.delete("/api/watchlist/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      await storage.removeFromWatchlist(id);
+      const user = req.user as any;
+      await storage.removeFromWatchlist(id, user.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error removing from watchlist:", error);
@@ -517,10 +527,11 @@ export async function registerRoutes(
   }
 
   // Portfolio analytics with caching
-  app.get("/api/portfolio/stats", async (req, res) => {
+  app.get("/api/portfolio/stats", requireAuth, async (req, res) => {
     try {
-      const holdings = await storage.getAllHoldings();
-      const trades = await storage.getAllTrades();
+      const user = req.user as any;
+      const holdings = await storage.getAllHoldings(user.id);
+      const trades = await storage.getAllTrades(user.id);
 
       // Get current prices for all holdings using cache
       const symbols = holdings.map(h => h.symbol);
@@ -685,11 +696,12 @@ export async function registerRoutes(
   });
 
   // Export portfolio to CSV or JSON
-  app.get("/api/portfolio/export", async (req, res) => {
+  app.get("/api/portfolio/export", requireAuth, async (req, res) => {
     try {
+      const user = req.user as any;
       const { format = "csv" } = req.query;
-      const holdings = await storage.getAllHoldings();
-      const trades = await storage.getAllTrades();
+      const holdings = await storage.getAllHoldings(user.id);
+      const trades = await storage.getAllTrades(user.id);
 
       if (format === "csv") {
         // Export holdings as CSV
@@ -720,8 +732,9 @@ export async function registerRoutes(
   });
 
   // Import portfolio from CSV or JSON
-  app.post("/api/portfolio/import", async (req, res) => {
+  app.post("/api/portfolio/import", requireAuth, async (req, res) => {
     try {
+      const user = req.user as any;
       const { data, format = "json", replaceExisting = false } = req.body;
 
       if (!data) {
@@ -764,8 +777,8 @@ export async function registerRoutes(
 
       // Clear existing data if requested
       if (replaceExisting) {
-        const existingHoldings = await storage.getAllHoldings();
-        await Promise.all(existingHoldings.map(h => storage.deleteHolding(h.id)));
+        const existingHoldings = await storage.getAllHoldings(user.id);
+        await Promise.all(existingHoldings.map(h => storage.deleteHolding(h.id, user.id)));
       }
 
       // Import holdings
@@ -779,7 +792,7 @@ export async function registerRoutes(
               quantity: holding.quantity.toString(),
               avgPrice: holding.avgPrice.toString(),
             });
-            return await storage.createHolding(validatedData);
+            return await storage.createHolding({ ...validatedData, userId: user.id });
           } catch (error) {
             console.error(`Failed to import holding ${holding.symbol}:`, error);
             return null;
@@ -800,7 +813,7 @@ export async function registerRoutes(
               fees: trade.fees?.toString() || "0",
               status: trade.status || "filled",
             });
-            return await storage.createTrade(validatedData);
+            return await storage.createTrade({ ...validatedData, userId: user.id });
           } catch (error) {
             console.error(`Failed to import trade:`, error);
             return null;
@@ -863,9 +876,9 @@ export async function registerRoutes(
   app.get("/api/admin/stats", requireAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      const holdings = await storage.getAllHoldings();
-      const trades = await storage.getAllTrades();
-      const watchlist = await storage.getAllWatchlist();
+      const holdings = await storage.getAllHoldingsForAdmin();
+      const trades = await storage.getAllTradesForAdmin();
+      const watchlist = await storage.getAllWatchlistForAdmin();
       
       res.json({
         users: {

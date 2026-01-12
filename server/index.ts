@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { setupAuth } from "./auth";
 import { ensureAdminColumn } from "./migrate";
+import { migrateUserIdColumns } from "./migrate-userid";
 import { createServer } from "http";
 
 const app = express();
@@ -65,14 +66,22 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  // Ensure database schema is up to date
-  try {
-    await ensureAdminColumn();
-  } catch (error) {
-    console.error("Failed to run migrations:", error);
-    // Continue anyway - manual migration can be run if needed
-  }
+      (async () => {
+        // Ensure database schema is up to date
+        try {
+          await ensureAdminColumn();
+        } catch (error) {
+          console.error("Failed to run admin column migration:", error);
+          // Continue anyway - manual migration can be run if needed
+        }
+
+        // Migrate userId columns for portfolio data
+        try {
+          await migrateUserIdColumns();
+        } catch (error) {
+          console.error("Failed to run userId migration:", error);
+          // Continue anyway - manual migration can be run if needed
+        }
 
   // Setup authentication before routes
   try {
