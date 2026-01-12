@@ -179,7 +179,7 @@ export class StockPredictor {
       throw new Error(`LSTM price model training failed: ${error.message || error}`);
     }
 
-    // Step 7: Train LSTM direction model
+    // Step 7: Train LSTM direction model (fewer epochs needed for classification)
     console.log('\n🎯 Training LSTM Direction Model...');
     this.directionModel = new LSTMDirectionModel(this.sequenceLength, features[0].length);
     await this.directionModel.train(
@@ -187,7 +187,7 @@ export class StockPredictor {
       yDirTrainSeq,
       XTestSeqDir,
       yDirTestSeq,
-      Math.floor(epochs / 2)
+      Math.min(30, Math.floor(epochs / 2)) // Cap at 30 epochs for efficiency
     );
 
     // Step 8: Train Gradient Boosting model (flattened features)
@@ -307,8 +307,14 @@ export class StockPredictor {
 
     console.log(`\n🔮 Predicting next ${days} days for ${symbol}`);
 
-    // Get recent data
-    let recentData = this.lastData.slice(-this.sequenceLength - 50); // Extra buffer for feature calc
+    // Get recent data - need at least 50 (for feature calc) + sequenceLength + 1 (for last feature)
+    const minDataPoints = 50 + this.sequenceLength + 1;
+    let recentData = this.lastData.slice(-minDataPoints);
+
+    // Validate we have enough data
+    if (recentData.length < minDataPoints) {
+      throw new Error(`Insufficient data for prediction. Need at least ${minDataPoints} data points, got ${recentData.length}`);
+    }
 
     const predictions: PredictionResult[] = [];
     const currentDate = new Date(recentData[recentData.length - 1].date);
@@ -325,8 +331,19 @@ export class StockPredictor {
       const { features } = FeatureEngineer.createFeatures(recentData);
       const scaledFeatures = this.featureScaler.transform(features);
 
-      // Create sequence
-      const sequence = scaledFeatures.slice(-this.sequenceLength);
+      // Create sequence - ensure we have exactly sequenceLength timesteps
+      let sequence = scaledFeatures.slice(-this.sequenceLength);
+      
+      // Safety check: pad with last feature if sequence is too short
+      if (sequence.length < this.sequenceLength) {
+        const lastFeature = sequence.length > 0 ? sequence[sequence.length - 1] : scaledFeatures[scaledFeatures.length - 1];
+        // Create copies of the feature vector (not references)
+        const padding = Array(this.sequenceLength - sequence.length)
+          .fill(null)
+          .map(() => [...lastFeature]);
+        sequence = [...padding, ...sequence];
+      }
+      
       const XSeq = [sequence];
 
       // Get LSTM prediction
@@ -380,7 +397,7 @@ export class StockPredictor {
       };
 
       recentData.push(nextDayData);
-      recentData = recentData.slice(-this.sequenceLength - 50); // Keep window
+      recentData = recentData.slice(-minDataPoints); // Keep window with minimum required data points
       currentDate.setTime(nextDate.getTime());
     }
 

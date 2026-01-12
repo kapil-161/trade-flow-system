@@ -458,19 +458,34 @@ export class LSTMPriceModel {
     const xValTensor = tf.tensor3d(XVal);
     const yValTensor = tf.tensor2d(yVal, [yVal.length, 1]);
 
+    // Track best validation loss for monitoring
+    let bestValLoss = Infinity;
+    let bestEpoch = 0;
+
     await this.model!.fit(xTrainTensor, yTrainTensor, {
       epochs,
-      batchSize: 32,
+      batchSize: Math.min(32, Math.max(8, Math.floor(XTrain.length / 4))), // Adaptive batch size
       validationData: [xValTensor, yValTensor],
       callbacks: {
-        onEpochEnd: (epoch, logs) => {
-          if (epoch % 10 === 0) {
+        onEpochEnd: async (epoch, logs) => {
+          const valLoss = logs?.val_loss as number;
+          
+          // Track best validation loss
+          if (valLoss < bestValLoss) {
+            bestValLoss = valLoss;
+            bestEpoch = epoch;
+          }
+
+          // Reduced logging frequency (every 20 epochs or last epoch)
+          if (epoch % 20 === 0 || epoch === epochs - 1) {
             console.log(`Epoch ${epoch}: loss = ${logs?.loss?.toFixed(4)}, val_loss = ${logs?.val_loss?.toFixed(4)}`);
           }
         }
       },
       verbose: 0
     });
+
+    console.log(`   Best validation loss: ${bestValLoss.toFixed(4)} at epoch ${bestEpoch}`);
 
     xTrainTensor.dispose();
     yTrainTensor.dispose();
@@ -564,19 +579,34 @@ export class LSTMDirectionModel {
     const xValTensor = tf.tensor3d(XVal);
     const yValTensor = tf.tensor2d(yVal);
 
+    // Track best validation loss for monitoring
+    let bestValLoss = Infinity;
+    let bestEpoch = 0;
+
     await this.model!.fit(xTrainTensor, yTrainTensor, {
       epochs,
-      batchSize: 32,
+      batchSize: Math.min(32, Math.max(8, Math.floor(XTrain.length / 4))), // Adaptive batch size
       validationData: [xValTensor, yValTensor],
       callbacks: {
-        onEpochEnd: (epoch, logs) => {
-          if (epoch % 5 === 0) {
+        onEpochEnd: async (epoch, logs) => {
+          const valLoss = logs?.val_loss as number;
+          
+          // Track best validation loss
+          if (valLoss < bestValLoss) {
+            bestValLoss = valLoss;
+            bestEpoch = epoch;
+          }
+
+          // Reduced logging frequency (every 10 epochs or last epoch)
+          if (epoch % 10 === 0 || epoch === epochs - 1) {
             console.log(`Direction Epoch ${epoch}: loss = ${logs?.loss?.toFixed(4)}, acc = ${logs?.acc?.toFixed(4)}`);
           }
         }
       },
       verbose: 0
     });
+
+    console.log(`   Best validation loss: ${bestValLoss.toFixed(4)} at epoch ${bestEpoch}`);
 
     xTrainTensor.dispose();
     yTrainTensor.dispose();

@@ -1298,6 +1298,8 @@ export async function registerRoutes(
 
   // Global predictor cache (in-memory for simplicity, can be persisted)
   const predictorCache = new Map<string, any>();
+  // Training lock to prevent concurrent training for the same symbol
+  const trainingLocks = new Map<string, Promise<any>>();
 
   // Test TensorFlow.js initialization (no auth required for testing)
   app.get("/api/ml/test", async (req, res) => {
@@ -1336,7 +1338,31 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Symbol is required" });
       }
 
-      console.log(`Training ML model for ${symbol}...`);
+      const symbolUpper = symbol.toUpperCase();
+
+      // Check if training is already in progress
+      if (trainingLocks.has(symbolUpper)) {
+        return res.status(409).json({ 
+          error: "Training already in progress",
+          message: `Model for ${symbolUpper} is currently being trained. Please wait.`
+        });
+      }
+
+      // Check if model already exists and is recent (within 24 hours)
+      const existingPredictor = predictorCache.get(symbolUpper);
+      if (existingPredictor && existingPredictor.trainedAt) {
+        const hoursSinceTraining = (Date.now() - new Date(existingPredictor.trainedAt).getTime()) / (1000 * 60 * 60);
+        if (hoursSinceTraining < 24) {
+          return res.status(200).json({
+            success: true,
+            symbol: symbolUpper,
+            message: `Model was trained ${hoursSinceTraining.toFixed(1)} hours ago. Use existing model or wait 24h to retrain.`,
+            cached: true
+          });
+        }
+      }
+
+      console.log(`🚀 Training ML model for ${symbolUpper}...`);
 
       // Dynamic import to avoid loading TensorFlow on startup
       const { StockPredictor } = await import("./stock-predictor");
@@ -1346,26 +1372,48 @@ export async function registerRoutes(
         priceChangeThreshold: 0.015
       });
 
-      // Set timeout for training (10 minutes max)
-      const trainPromise = predictor.train(symbol, range, epochs);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Training timeout")), 600000);
-      });
+      // Create training promise and add to lock
+      const trainPromise = (async () => {
+        try {
+          // Set timeout for training (10 minutes max)
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Training timeout")), 600000);
+          });
 
-      const metrics = await Promise.race([trainPromise, timeoutPromise]) as any;
+          const metrics = await Promise.race([
+            predictor.train(symbolUpper, range, epochs),
+            timeoutPromise
+          ]) as any;
 
-      // Cache the trained predictor
-      predictorCache.set(symbol, predictor);
+          // Cache the trained predictor with timestamp
+          predictorCache.set(symbolUpper, {
+            predictor,
+            trainedAt: new Date().toISOString()
+          });
+
+          return metrics;
+        } finally {
+          // Remove lock when done
+          trainingLocks.delete(symbolUpper);
+        }
+      })();
+
+      trainingLocks.set(symbolUpper, trainPromise);
+
+      const metrics = await trainPromise;
 
       res.json({
         success: true,
-        symbol,
+        symbol: symbolUpper,
         metrics,
         message: "Model trained successfully"
       });
     } catch (error: any) {
+      const symbolUpper = req.body.symbol?.toUpperCase();
+      if (symbolUpper) {
+        trainingLocks.delete(symbolUpper);
+      }
       console.error("Error training ML model:", error);
-      console.error("Error stack:", error.stack);
       const errorMessage = error?.message || error?.toString() || "Failed to train ML model";
       res.status(500).json({ 
         error: errorMessage,
@@ -1386,7 +1434,8 @@ export async function registerRoutes(
       }
 
       // Check if model is trained for this symbol
-      let predictor = predictorCache.get(symbol);
+      const cached = predictorCache.get(symbol);
+      const predictor = cached?.predictor || cached;
 
       if (!predictor) {
         return res.status(404).json({
@@ -1419,7 +1468,8 @@ export async function registerRoutes(
       console.log(`Quick predict for ${symbol}...`);
 
       // Check if model exists, if not, train it
-      let predictor = predictorCache.get(symbol);
+      const cached = predictorCache.get(symbol);
+      let predictor = cached?.predictor || cached;
 
       if (!predictor) {
         console.log(`No cached model for ${symbol}, training now...`);
@@ -1432,7 +1482,10 @@ export async function registerRoutes(
 
         // Train with fewer epochs for speed
         await predictor.train(symbol, "1y", 40);
-        predictorCache.set(symbol, predictor);
+        predictorCache.set(symbol, {
+          predictor,
+          trainedAt: new Date().toISOString()
+        });
       }
 
       const predictions = await predictor.predictNextDays(symbol, numDays);
@@ -1452,9 +1505,9 @@ export async function registerRoutes(
   // Get list of trained models
   app.get("/api/ml/models", requireAuth, async (_req, res) => {
     try {
-      const models = Array.from(predictorCache.keys()).map(symbol => ({
+      const models = Array.from(predictorCache.entries()).map(([symbol, cached]) => ({
         symbol,
-        trainedAt: new Date().toISOString() // Could be enhanced with actual timestamps
+        trainedAt: cached?.trainedAt || new Date().toISOString()
       }));
 
       res.json({ models });
