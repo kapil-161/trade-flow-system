@@ -1083,13 +1083,21 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email address is required" });
       }
 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Invalid email address format" });
+      }
+
       const { sendTestEmail } = await import("./email");
       await sendTestEmail(email);
 
       res.json({ message: "Test email sent successfully" });
     } catch (error: any) {
       console.error("Error sending test email:", error);
-      res.status(500).json({ error: error.message || "Failed to send test email" });
+      // Ensure we always return JSON, even on error
+      const errorMessage = error?.message || "Failed to send test email";
+      res.status(500).json({ error: errorMessage });
     }
   });
 

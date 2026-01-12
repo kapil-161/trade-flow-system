@@ -363,11 +363,26 @@ function SMTPConfigSection() {
         credentials: "include",
         body: JSON.stringify({ email }),
       });
+      
+      const contentType = response.headers.get("content-type");
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to send test email");
+        // Check if response is JSON
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          throw new Error(data.error || `Failed to send test email (${response.status})`);
+        } else {
+          // Response is HTML (error page)
+          const text = await response.text();
+          throw new Error(`Server error (${response.status}): ${response.statusText}. Please check server logs.`);
+        }
       }
-      return response.json();
+      
+      // Check if response is JSON before parsing
+      if (contentType && contentType.includes("application/json")) {
+        return response.json();
+      } else {
+        throw new Error("Server returned unexpected response format");
+      }
     },
     onSuccess: () => {
       toast({
