@@ -5,10 +5,14 @@ import { ActivePositions } from "@/components/dashboard/ActivePositions";
 import { MarketTicker } from "@/components/dashboard/MarketTicker";
 import { OrderDialog } from "@/components/dashboard/OrderDialog";
 import { RiskMonitor } from "@/components/dashboard/RiskMonitor";
+import { StockSearchDialog } from "@/components/dashboard/StockSearchDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, Search } from "lucide-react";
+import { useState } from "react";
 
 export default function Dashboard() {
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+
   return (
     <DashboardLayout>
       <div className="flex flex-col space-y-6 pb-8">
@@ -18,6 +22,14 @@ export default function Dashboard() {
             <p className="text-muted-foreground">Welcome back, Trader. Here's your portfolio overview.</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="bg-card/50 backdrop-blur border-border/50 hover:bg-card/80"
+              onClick={() => setSearchDialogOpen(true)}
+            >
+              <Search className="mr-2 h-4 w-4" />
+              Search Stock
+            </Button>
             <Button variant="outline" className="bg-card/50 backdrop-blur border-border/50 hover:bg-card/80">
               <Download className="mr-2 h-4 w-4" />
               Export Report
@@ -31,6 +43,8 @@ export default function Dashboard() {
             </OrderDialog>
           </div>
         </div>
+
+        <StockSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
 
         <MarketTicker />
         
