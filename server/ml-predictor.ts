@@ -342,6 +342,33 @@ export class SequenceBuilder {
 
 // ================== LSTM MODEL ==================
 
+/**
+ * Custom Huber loss function for TensorFlow.js
+ * Huber loss is robust to outliers, combining MSE for small errors and MAE for large errors
+ * @param delta - Threshold parameter (default: 1.0)
+ */
+function huberLoss(delta: number = 1.0): (yTrue: tf.Tensor, yPred: tf.Tensor) => tf.Tensor {
+  return (yTrue: tf.Tensor, yPred: tf.Tensor): tf.Tensor => {
+    const error = tf.sub(yTrue, yPred);
+    const absError = tf.abs(error);
+    const squaredError = tf.square(error);
+    const deltaTensor = tf.scalar(delta);
+    
+    // For small errors (|error| <= delta): use squared error
+    // For large errors (|error| > delta): use linear error
+    const smallError = tf.mul(tf.scalar(0.5), squaredError);
+    const largeError = tf.sub(
+      tf.mul(deltaTensor, absError),
+      tf.mul(tf.scalar(0.5), tf.square(deltaTensor))
+    );
+    
+    const condition = tf.lessEqual(absError, deltaTensor);
+    const loss = tf.where(condition, smallError, largeError);
+    
+    return tf.mean(loss);
+  };
+}
+
 export class LSTMPriceModel {
   private model: tf.LayersModel | null = null;
   private sequenceLength: number;
@@ -375,10 +402,10 @@ export class LSTMPriceModel {
 
     this.model = tf.model({ inputs: input, outputs: output });
 
-    // Use Huber loss matching Python
+    // Use custom Huber loss matching Python implementation
     this.model.compile({
       optimizer: tf.train.adamax(0.001),
-      loss: 'huber',
+      loss: huberLoss(1.0),
       metrics: ['mae']
     });
   }
