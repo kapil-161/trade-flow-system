@@ -403,6 +403,13 @@ function SMTPConfigSection() {
         </CardTitle>
         <CardDescription>
           Configure SMTP settings for password reset emails. Settings are stored in the database and take precedence over environment variables.
+          <br />
+          <span className="text-xs text-muted-foreground mt-1 block">
+            💡 <strong>Gmail users:</strong> Enable 2-Step Verification and create an App Password at{" "}
+            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              myaccount.google.com/apppasswords
+            </a>
+          </span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -466,12 +473,21 @@ function SMTPConfigSection() {
               type="password"
               placeholder="Enter SMTP password or app password"
               value={smtpSettings.password}
-              onChange={(e) => setSmtpSettings({ ...smtpSettings, password: e.target.value })}
+              onChange={(e) => {
+                // Remove spaces from Gmail app passwords automatically
+                const cleanedPassword = e.target.value.replace(/\s/g, '');
+                setSmtpSettings({ ...smtpSettings, password: cleanedPassword });
+              }}
               disabled={saveSettings.isPending}
             />
             <p className="text-xs text-muted-foreground">
-              For Gmail, use an App Password (not your regular password)
+              For Gmail, use an App Password (not your regular password). Spaces will be automatically removed.
             </p>
+            {smtpSettings.password && smtpSettings.password.length < 8 && (
+              <p className="text-xs text-yellow-500">
+                ⚠️ Password seems too short. Gmail app passwords are 16 characters.
+              </p>
+            )}
           </div>
         </div>
 
@@ -492,12 +508,16 @@ function SMTPConfigSection() {
             onClick={() => saveSettings.mutate()}
             disabled={
               saveSettings.isPending || 
-              !smtpSettings.host || 
-              !smtpSettings.user || 
-              (!smtpSettings.password && !currentSettings?.configured)
+              !smtpSettings.host?.trim() || 
+              !smtpSettings.user?.trim() || 
+              (!smtpSettings.password?.trim() && !currentSettings?.configured)
             }
             title={
-              !smtpSettings.password && !currentSettings?.configured
+              !smtpSettings.host?.trim()
+                ? "SMTP Host is required"
+                : !smtpSettings.user?.trim()
+                ? "SMTP Username/Email is required"
+                : !smtpSettings.password?.trim() && !currentSettings?.configured
                 ? "Password is required for new SMTP configuration"
                 : undefined
             }
