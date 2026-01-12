@@ -7,7 +7,6 @@ import { marketCache } from "./cache";
 import { BacktestEngine, TechnicalIndicators } from "./backtest";
 import { requireAdmin, requireAuth } from "./auth";
 import { setupWebSocket } from "./websocket";
-import { calculateRiskAnalytics } from "./risk-analytics";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -950,76 +949,10 @@ export async function registerRoutes(
     }
   });
 
-  // Risk Analytics endpoint
-  app.get("/api/portfolio/risk-analytics", requireAuth, async (req, res) => {
-    try {
-      const user = req.user as any;
-      const holdings = await storage.getAllHoldings(user.id);
-
-      if (holdings.length === 0) {
-        return res.status(400).json({ error: "No holdings in portfolio. Add assets to analyze risk." });
-      }
-
-      // Get current prices and historical data for all holdings
-      const symbols = holdings.map(h => h.symbol);
-      const quotes = await marketCache.getMultiQuotes(symbols);
-      const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
-
-      // Fetch 3 months of historical data for returns calculation
-      const historicalDataPromises = symbols.map(symbol =>
-        marketCache.getHistory(symbol, "3mo", "1d").catch(() => [])
-      );
-      const allHistoricalData = await Promise.all(historicalDataPromises);
-
-      // Build portfolio positions with returns data
-      const positions = holdings.map((holding, index) => {
-        const history = allHistoricalData[index];
-        const historicalPrices = history.map((item: any) => item.close);
-        const returns = [];
-
-        // Calculate daily returns
-        for (let i = 1; i < historicalPrices.length; i++) {
-          if (historicalPrices[i - 1] !== 0) {
-            returns.push((historicalPrices[i] - historicalPrices[i - 1]) / historicalPrices[i - 1]);
-          }
-        }
-
-        return {
-          symbol: holding.symbol,
-          name: holding.name,
-          quantity: parseFloat(holding.quantity),
-          avgPrice: parseFloat(holding.avgPrice),
-          currentPrice: priceMap[holding.symbol] || parseFloat(holding.avgPrice),
-          returns,
-          historicalPrices,
-        };
-      });
-
-      // Optional: Get benchmark returns (SPY for US market)
-      let benchmarkReturns: number[] | undefined;
-      try {
-        const spyHistory = await marketCache.getHistory("SPY", "3mo", "1d");
-        const spyPrices = spyHistory.map((item: any) => item.close);
-        benchmarkReturns = [];
-        for (let i = 1; i < spyPrices.length; i++) {
-          if (spyPrices[i - 1] !== 0) {
-            benchmarkReturns.push((spyPrices[i] - spyPrices[i - 1]) / spyPrices[i - 1]);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching benchmark data:", error);
-        // Continue without benchmark
-      }
-
-      // Calculate risk analytics
-      const riskAnalytics = await calculateRiskAnalytics(positions, benchmarkReturns);
-
-      res.json(riskAnalytics);
-    } catch (error) {
-      console.error("Error calculating risk analytics:", error);
-      res.status(500).json({ error: "Failed to calculate risk analytics" });
-    }
-  });
+  // Risk Analytics endpoint - TODO: Implement risk-analytics.ts
+  // app.get("/api/portfolio/risk-analytics", requireAuth, async (req, res) => {
+  //   Commented out until risk-analytics.ts is implemented
+  // });
 
   // Admin routes
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
