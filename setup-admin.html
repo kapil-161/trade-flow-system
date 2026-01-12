@@ -54,7 +54,12 @@
             resultDiv.className = '';
             
             try {
-                const response = await fetch('https://trade-flow-app.onrender.com/api/setup/first-admin', {
+                // Try relative URL first (if opened from the app), then fallback to absolute
+                const apiUrl = window.location.origin.includes('onrender.com') 
+                    ? '/api/setup/first-admin'
+                    : 'https://trade-flow-app.onrender.com/api/setup/first-admin';
+                
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
