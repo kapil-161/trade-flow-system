@@ -21,6 +21,8 @@ export function OrderDialog({ children }: OrderDialogProps) {
   const [orderType, setOrderType] = useState("limit");
   const [side, setSide] = useState("buy");
   const [symbol, setSymbol] = useState("BTC");
+  const [customSymbol, setCustomSymbol] = useState("");
+  const [useCustomSymbol, setUseCustomSymbol] = useState(false);
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
   const [open, setOpen] = useState(false);
@@ -30,6 +32,17 @@ export function OrderDialog({ children }: OrderDialogProps) {
   const { toast } = useToast();
 
   const handleSubmit = async () => {
+    const finalSymbol = useCustomSymbol ? customSymbol.trim().toUpperCase() : symbol;
+
+    if (!finalSymbol) {
+      toast({
+        title: "Invalid Order",
+        description: "Please enter a symbol",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!quantity || (orderType !== "market" && !price)) {
       toast({
         title: "Invalid Order",
@@ -44,7 +57,7 @@ export function OrderDialog({ children }: OrderDialogProps) {
 
     try {
       await createTrade.mutateAsync({
-        symbol,
+        symbol: finalSymbol,
         side: side as "buy" | "sell",
         quantity: tradeQuantity.toString(),
         price: tradePrice.toFixed(2),
@@ -55,10 +68,11 @@ export function OrderDialog({ children }: OrderDialogProps) {
 
       toast({
         title: "Order Placed",
-        description: `${side === "buy" ? "Bought" : "Sold"} ${quantity} ${symbol}`,
+        description: `${side === "buy" ? "Bought" : "Sold"} ${quantity} ${finalSymbol}`,
       });
 
       // Reset form and close dialog
+      setCustomSymbol("");
       setQuantity("");
       setPrice("");
       setOpen(false);
@@ -95,21 +109,44 @@ export function OrderDialog({ children }: OrderDialogProps) {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Asset</Label>
-                <Select value={symbol} onValueChange={setSymbol}>
-                  <SelectTrigger data-testid="select-symbol">
-                    <SelectValue placeholder="Symbol" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    <ScrollArea className="h-[280px] w-full">
-                      {POPULAR_SYMBOLS.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label} ({s.value})
-                        </SelectItem>
-                      ))}
-                    </ScrollArea>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label>Asset</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseCustomSymbol(!useCustomSymbol);
+                      if (!useCustomSymbol) setCustomSymbol("");
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {useCustomSymbol ? "Choose from list" : "Enter custom"}
+                  </button>
+                </div>
+                {useCustomSymbol ? (
+                  <Input
+                    type="text"
+                    placeholder="e.g., AAPL, TSLA"
+                    value={customSymbol}
+                    onChange={(e) => setCustomSymbol(e.target.value.toUpperCase())}
+                    className="uppercase"
+                    data-testid="input-custom-symbol"
+                  />
+                ) : (
+                  <Select value={symbol} onValueChange={setSymbol}>
+                    <SelectTrigger data-testid="select-symbol">
+                      <SelectValue placeholder="Symbol" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <ScrollArea className="h-[280px] w-full">
+                        {POPULAR_SYMBOLS.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label} ({s.value})
+                          </SelectItem>
+                        ))}
+                      </ScrollArea>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Type</Label>
@@ -129,15 +166,17 @@ export function OrderDialog({ children }: OrderDialogProps) {
             <div className="space-y-2">
               <Label>Quantity</Label>
               <div className="relative">
-                <Input 
-                  type="number" 
-                  placeholder="0.00" 
-                  className="pr-12 font-mono-nums" 
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className="pr-20 font-mono-nums"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   data-testid="input-quantity"
                 />
-                <span className="absolute right-3 top-2.5 text-xs text-muted-foreground">{symbol}</span>
+                <span className="absolute right-3 top-2.5 text-xs text-muted-foreground">
+                  {useCustomSymbol ? (customSymbol || "SYMBOL") : symbol}
+                </span>
               </div>
             </div>
 
