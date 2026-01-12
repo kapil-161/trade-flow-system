@@ -1018,5 +1018,70 @@ export async function registerRoutes(
     }
   });
 
+  // SMTP Settings endpoints
+  app.get("/api/admin/smtp-settings", requireAdmin, async (req, res) => {
+    try {
+      const smtpHost = await storage.getSetting("smtp_host");
+      const smtpPort = await storage.getSetting("smtp_port");
+      const smtpSecure = await storage.getSetting("smtp_secure");
+      const smtpUser = await storage.getSetting("smtp_user");
+      const smtpPassword = await storage.getSetting("smtp_password");
+
+      res.json({
+        host: smtpHost?.value || process.env.SMTP_HOST || "",
+        port: smtpPort?.value || process.env.SMTP_PORT || "587",
+        secure: smtpSecure?.value === "true" || process.env.SMTP_SECURE === "true",
+        user: smtpUser?.value || process.env.SMTP_USER || "",
+        password: smtpPassword?.value ? "***" : (process.env.SMTP_PASSWORD ? "***" : ""), // Don't expose password
+        configured: !!(smtpUser?.value && smtpPassword?.value) || !!(process.env.SMTP_USER && process.env.SMTP_PASSWORD),
+      });
+    } catch (error) {
+      console.error("Error fetching SMTP settings:", error);
+      res.status(500).json({ error: "Failed to fetch SMTP settings" });
+    }
+  });
+
+  app.post("/api/admin/smtp-settings", requireAdmin, async (req, res) => {
+    try {
+      const { host, port, secure, user, password } = req.body;
+
+      if (!host || !port || !user || !password) {
+        return res.status(400).json({ error: "Host, port, user, and password are required" });
+      }
+
+      await storage.setSetting("smtp_host", host);
+      await storage.setSetting("smtp_port", String(port));
+      await storage.setSetting("smtp_secure", secure ? "true" : "false");
+      await storage.setSetting("smtp_user", user);
+      await storage.setSetting("smtp_password", password);
+
+      // Clear transporter cache to force reload
+      // This is handled in email.ts by checking config changes
+
+      res.json({ message: "SMTP settings updated successfully" });
+    } catch (error) {
+      console.error("Error updating SMTP settings:", error);
+      res.status(500).json({ error: "Failed to update SMTP settings" });
+    }
+  });
+
+  app.post("/api/admin/test-email", requireAdmin, async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email address is required" });
+      }
+
+      const { sendTestEmail } = await import("./email");
+      await sendTestEmail(email);
+
+      res.json({ message: "Test email sent successfully" });
+    } catch (error: any) {
+      console.error("Error sending test email:", error);
+      res.status(500).json({ error: error.message || "Failed to send test email" });
+    }
+  });
+
   return httpServer;
 }

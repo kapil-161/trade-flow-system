@@ -7,13 +7,17 @@ import {
   type InsertTrade,
   type Watchlist,
   type InsertWatchlist,
+  type Setting,
+  type InsertSetting,
   users,
   holdings,
   trades,
-  watchlist
+  watchlist,
+  settings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -48,6 +52,12 @@ export interface IStorage {
   getAllHoldingsForAdmin(): Promise<Holding[]>;
   getAllTradesForAdmin(): Promise<Trade[]>;
   getAllWatchlistForAdmin(): Promise<Watchlist[]>;
+
+  // Settings methods
+  getSetting(key: string): Promise<Setting | undefined>;
+  getAllSettings(): Promise<Setting[]>;
+  setSetting(key: string, value: string): Promise<Setting>;
+  deleteSetting(key: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -192,6 +202,38 @@ export class DatabaseStorage implements IStorage {
 
   async getAllWatchlistForAdmin(): Promise<Watchlist[]> {
     return await db.select().from(watchlist).orderBy(desc(watchlist.createdAt));
+  }
+
+  // Settings methods
+  async getSetting(key: string): Promise<Setting | undefined> {
+    const [setting] = await db.select().from(settings).where(eq(settings.key, key));
+    return setting || undefined;
+  }
+
+  async getAllSettings(): Promise<Setting[]> {
+    return await db.select().from(settings);
+  }
+
+  async setSetting(key: string, value: string): Promise<Setting> {
+    const existing = await this.getSetting(key);
+    if (existing) {
+      const [updated] = await db
+        .update(settings)
+        .set({ value, updatedAt: sql`NOW()` })
+        .where(eq(settings.key, key))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(settings)
+        .values({ key, value })
+        .returning();
+      return created;
+    }
+  }
+
+  async deleteSetting(key: string): Promise<void> {
+    await db.delete(settings).where(eq(settings.key, key));
   }
 }
 

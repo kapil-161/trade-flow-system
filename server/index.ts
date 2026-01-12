@@ -5,6 +5,8 @@ import { serveStatic } from "./static";
 import { setupAuth } from "./auth";
 import { ensureAdminColumn } from "./migrate";
 import { migrateUserIdColumns } from "./migrate-userid";
+import { migrateResetTokenColumns } from "./migrate-reset-token";
+import { migrateSettingsTable } from "./migrate-settings";
 import { createServer } from "http";
 
 const app = express();
@@ -80,6 +82,22 @@ app.use((req, res, next) => {
           await migrateUserIdColumns();
         } catch (error) {
           console.error("Failed to run userId migration:", error);
+          // Continue anyway - manual migration can be run if needed
+        }
+
+        // Migrate reset token columns for password reset
+        try {
+          await migrateResetTokenColumns();
+        } catch (error) {
+          console.error("Failed to run reset token migration:", error);
+          // Continue anyway - manual migration can be run if needed
+        }
+
+        // Migrate settings table
+        try {
+          await migrateSettingsTable();
+        } catch (error) {
+          console.error("Failed to run settings table migration:", error);
           // Continue anyway - manual migration can be run if needed
         }
 

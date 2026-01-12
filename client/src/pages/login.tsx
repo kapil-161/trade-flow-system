@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { TrendingUp } from "lucide-react";
+import { Link } from "wouter";
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -58,18 +59,18 @@ export default function LoginPage() {
           </CardTitle>
           <CardDescription>
             {isLogin
-              ? "Enter your credentials to access your portfolio"
-              : "Sign up to start tracking your investments"}
+              ? "Enter your email and password to access your portfolio"
+              : "Sign up with your email address to start tracking your investments"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Email Address</Label>
               <Input
                 id="username"
-                type="text"
-                placeholder="Enter your username"
+                type="email"
+                placeholder="Enter your email address"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -94,17 +95,32 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
-              disabled={isLoading}
-            >
-              {isLogin
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
-            </button>
+          <div className="mt-4 space-y-2 text-center text-sm">
+            {isLogin && (
+              <div>
+                <Link href="/forgot-password">
+                  <button
+                    type="button"
+                    className="text-primary hover:underline"
+                    disabled={isLoading}
+                  >
+                    Forgot your password?
+                  </button>
+                </Link>
+              </div>
+            )}
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-primary hover:underline"
+                disabled={isLoading}
+              >
+                {isLogin
+                  ? "Don't have an account? Sign up"
+                  : "Already have an account? Sign in"}
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>

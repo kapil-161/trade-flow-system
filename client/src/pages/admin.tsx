@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Users, TrendingUp, History, Star, Loader2 } from "lucide-react";
+import { Shield, Users, TrendingUp, History, Star, Loader2, Mail, Settings as SettingsIcon, CheckCircle2, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface AdminUser {
   id: string;
@@ -214,53 +218,314 @@ export default function AdminPage() {
         </Card>
       </div>
 
-      {/* Users Table */}
+      {/* Tabs for different admin sections */}
+      <Tabs defaultValue="users" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="smtp">SMTP Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="users" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>User Management</CardTitle>
+              <CardDescription>Manage user permissions and roles</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {usersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead className="text-right">Admin Access</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users?.map((adminUser) => (
+                      <TableRow key={adminUser.id}>
+                        <TableCell className="font-medium">{adminUser.username}</TableCell>
+                        <TableCell>
+                          <Badge variant={adminUser.isAdmin ? "default" : "secondary"}>
+                            {adminUser.isAdmin ? "Admin" : "User"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Switch
+                              checked={adminUser.isAdmin}
+                              onCheckedChange={(checked) =>
+                                updateUserAdmin.mutate({ userId: adminUser.id, isAdmin: checked })
+                              }
+                              disabled={updateUserAdmin.isPending || adminUser.id === user?.id}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="smtp" className="space-y-4">
+          <SMTPConfigSection />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function SMTPConfigSection() {
+  const { toast } = useToast();
+  const [smtpSettings, setSmtpSettings] = useState({
+    host: "",
+    port: "587",
+    secure: false,
+    user: "",
+    password: "",
+  });
+  const [testEmail, setTestEmail] = useState("");
+
+  const { data: currentSettings, isLoading: settingsLoading, refetch } = useQuery({
+    queryKey: ["smtp-settings"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/smtp-settings", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch SMTP settings");
+      return response.json();
+    },
+  });
+
+  useEffect(() => {
+    if (currentSettings) {
+      setSmtpSettings({
+        host: currentSettings.host || "",
+        port: currentSettings.port || "587",
+        secure: currentSettings.secure || false,
+        user: currentSettings.user || "",
+        password: "", // Never show actual password
+      });
+      setTestEmail(currentSettings.user || "");
+    }
+  }, [currentSettings]);
+
+  const saveSettings = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/smtp-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(smtpSettings),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to save SMTP settings");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "SMTP settings saved successfully",
+      });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save SMTP settings",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const response = await fetch("/api/admin/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to send test email");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Test Email Sent",
+        description: `Test email sent successfully to ${testEmail}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send test email",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (settingsLoading) {
+    return (
       <Card>
-        <CardHeader>
-          <CardTitle>User Management</CardTitle>
-          <CardDescription>Manage user permissions and roles</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {usersLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Admin Access</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users?.map((adminUser) => (
-                  <TableRow key={adminUser.id}>
-                    <TableCell className="font-medium">{adminUser.username}</TableCell>
-                    <TableCell>
-                      <Badge variant={adminUser.isAdmin ? "default" : "secondary"}>
-                        {adminUser.isAdmin ? "Admin" : "User"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Switch
-                          checked={adminUser.isAdmin}
-                          onCheckedChange={(checked) =>
-                            updateUserAdmin.mutate({ userId: adminUser.id, isAdmin: checked })
-                          }
-                          disabled={updateUserAdmin.isPending || adminUser.id === user?.id}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Mail className="h-5 w-5" />
+          SMTP Configuration
+        </CardTitle>
+        <CardDescription>
+          Configure SMTP settings for password reset emails. Settings are stored in the database and take precedence over environment variables.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Status indicator */}
+        {currentSettings?.configured && (
+          <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+            <CheckCircle2 className="h-5 w-5 text-green-500" />
+            <span className="text-sm text-green-500">SMTP is configured and ready to use</span>
+          </div>
+        )}
+        {!currentSettings?.configured && (
+          <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-yellow-500" />
+            <span className="text-sm text-yellow-500">SMTP is not configured. Password reset emails will not be sent.</span>
+          </div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="smtp-host">SMTP Host</Label>
+            <Input
+              id="smtp-host"
+              placeholder="smtp.gmail.com"
+              value={smtpSettings.host}
+              onChange={(e) => setSmtpSettings({ ...smtpSettings, host: e.target.value })}
+              disabled={saveSettings.isPending}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="smtp-port">SMTP Port</Label>
+            <Input
+              id="smtp-port"
+              type="number"
+              placeholder="587"
+              value={smtpSettings.port}
+              onChange={(e) => setSmtpSettings({ ...smtpSettings, port: e.target.value })}
+              disabled={saveSettings.isPending}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="smtp-user">SMTP Username/Email</Label>
+            <Input
+              id="smtp-user"
+              type="email"
+              placeholder="your-email@gmail.com"
+              value={smtpSettings.user}
+              onChange={(e) => {
+                setSmtpSettings({ ...smtpSettings, user: e.target.value });
+                setTestEmail(e.target.value);
+              }}
+              disabled={saveSettings.isPending}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="smtp-password">SMTP Password</Label>
+            <Input
+              id="smtp-password"
+              type="password"
+              placeholder="Enter SMTP password or app password"
+              value={smtpSettings.password}
+              onChange={(e) => setSmtpSettings({ ...smtpSettings, password: e.target.value })}
+              disabled={saveSettings.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              For Gmail, use an App Password (not your regular password)
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="smtp-secure"
+            checked={smtpSettings.secure}
+            onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, secure: checked })}
+            disabled={isSaving}
+          />
+          <Label htmlFor="smtp-secure" className="cursor-pointer">
+            Use SSL (port 465) instead of TLS (port 587)
+          </Label>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={() => saveSettings.mutate()}
+            disabled={saveSettings.isPending || !smtpSettings.host || !smtpSettings.user || !smtpSettings.password}
+          >
+            {saveSettings.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <SettingsIcon className="mr-2 h-4 w-4" />
+                Save Settings
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => testEmailMutation.mutate(testEmail)}
+            disabled={testEmailMutation.isPending || !testEmail || !currentSettings?.configured}
+          >
+            {testEmailMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Send Test Email
+              </>
+            )}
+          </Button>
+        </div>
+
+        <div className="p-4 bg-muted rounded-lg">
+          <h4 className="font-semibold mb-2 text-sm">Common SMTP Providers:</h4>
+          <ul className="text-xs text-muted-foreground space-y-1">
+            <li><strong>Gmail:</strong> smtp.gmail.com, Port 587 (TLS) or 465 (SSL), Use App Password</li>
+            <li><strong>Outlook:</strong> smtp.office365.com, Port 587 (TLS)</li>
+            <li><strong>SendGrid:</strong> smtp.sendgrid.net, Port 587 (TLS), Username: apikey</li>
+            <li><strong>Mailgun:</strong> smtp.mailgun.org, Port 587 (TLS)</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

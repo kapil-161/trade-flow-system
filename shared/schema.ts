@@ -8,13 +8,18 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   isAdmin: text("is_admin").default("false").notNull(),
+  resetToken: text("reset_token"),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
   isAdmin: true,
-}).partial({ isAdmin: true });
+}).partial({ isAdmin: true }).extend({
+  username: z.string().email("Username must be a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -55,6 +60,22 @@ export const watchlist = pgTable("watchlist", {
   type: text("type").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Settings table - system-wide settings (SMTP, etc.)
+export const settings = pgTable("settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSettingSchema = createInsertSchema(settings).pick({
+  key: true,
+  value: true,
+});
+
+export type Setting = typeof settings.$inferSelect;
+export type InsertSetting = z.infer<typeof insertSettingSchema>;
 
 // Insert schemas (userId will be set server-side from authenticated user)
 export const insertHoldingSchema = createInsertSchema(holdings).omit({

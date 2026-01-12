@@ -15,6 +15,8 @@ import Settings from "@/pages/settings";
 import AdminPage from "@/pages/admin";
 import SetupAdminPage from "@/pages/setup-admin";
 import LoginPage from "@/pages/login";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -49,6 +51,12 @@ function Router() {
     <Switch>
       <Route path="/login">
         {user ? <Redirect to="/" /> : <LoginPage />}
+      </Route>
+      <Route path="/forgot-password">
+        {user ? <Redirect to="/" /> : <ForgotPasswordPage />}
+      </Route>
+      <Route path="/reset-password">
+        {user ? <Redirect to="/" /> : <ResetPasswordPage />}
       </Route>
       <Route path="/">
         {() => <ProtectedRoute component={Dashboard} />}
