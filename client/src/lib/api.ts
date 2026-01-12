@@ -33,6 +33,7 @@ export interface PortfolioStats {
 }
 
 // Market Data Hooks
+// Note: For real-time updates, use useRealtimeQuote from @/lib/websocket
 export function useQuote(symbol: string) {
   return useQuery<Quote>({
     queryKey: ["quote", symbol],
@@ -43,11 +44,12 @@ export function useQuote(symbol: string) {
       if (!response.ok) throw new Error("Failed to fetch quote");
       return response.json();
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000, // Refresh every 60 seconds (WebSocket provides real-time updates every 1 minute)
     enabled: !!symbol,
   });
 }
 
+// Note: For real-time updates, use useRealtimeQuotes from @/lib/websocket
 export function useMultiQuotes(symbols: string[]) {
   return useQuery<Quote[]>({
     queryKey: ["quotes", symbols],
@@ -61,7 +63,7 @@ export function useMultiQuotes(symbols: string[]) {
       if (!response.ok) throw new Error("Failed to fetch quotes");
       return response.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // Refresh every 60 seconds (WebSocket provides real-time updates every 1 minute)
     enabled: symbols.length > 0,
   });
 }

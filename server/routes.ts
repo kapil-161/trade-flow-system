@@ -6,20 +6,40 @@ import { z } from "zod";
 import { marketCache } from "./cache";
 import { BacktestEngine, TechnicalIndicators } from "./backtest";
 import { requireAdmin, requireAuth } from "./auth";
+import { setupWebSocket } from "./websocket";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup WebSocket for real-time market data
+  setupWebSocket(httpServer);
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
     try {
       // Test database connection
       const users = await storage.getAllUsers();
-      res.json({ status: "ok", database: "connected", users: users.length });
+      const rateLimitStatus = marketCache.getRateLimitStatus();
+      res.json({ 
+        status: "ok", 
+        database: "connected", 
+        users: users.length,
+        rateLimit: rateLimitStatus,
+      });
     } catch (error) {
       console.error("Health check failed:", error);
       res.status(503).json({ status: "error", database: "disconnected", error: String(error) });
+    }
+  });
+
+  // Rate limit status endpoint
+  app.get("/api/market/rate-limit-status", async (req, res) => {
+    try {
+      const status = marketCache.getRateLimitStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting rate limit status:", error);
+      res.status(500).json({ error: "Failed to get rate limit status" });
     }
   });
 

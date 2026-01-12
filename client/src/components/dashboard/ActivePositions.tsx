@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MoreVertical, Edit2, Trash2, Trash } from "lucide-react";
 import { useHoldings, useMultiQuotes, useUpdateHolding, useDeleteHolding, useDeleteAllHoldings } from "@/lib/api";
+import { useRealtimeQuotes } from "@/lib/websocket";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +38,18 @@ import type { Holding } from "@shared/schema";
 export function ActivePositions() {
   const { data: holdings = [], isLoading: holdingsLoading } = useHoldings();
   const symbols = holdings.map(h => h.symbol);
-  const { data: quotes = [], isLoading: quotesLoading } = useMultiQuotes(symbols);
+  
+  // Use real-time WebSocket quotes, fallback to REST API
+  const realtimeQuotes = useRealtimeQuotes(symbols);
+  const { data: restQuotes = [], isLoading: quotesLoading } = useMultiQuotes(symbols);
+  
+  // Merge real-time quotes with REST quotes (real-time takes precedence)
+  const quotes = symbols.map(symbol => {
+    const realtime = realtimeQuotes.get(symbol);
+    if (realtime) return realtime;
+    return restQuotes.find(q => q.symbol === symbol);
+  }).filter(Boolean) as typeof restQuotes;
+  
   const updateHolding = useUpdateHolding();
   const deleteHolding = useDeleteHolding();
   const deleteAllHoldings = useDeleteAllHoldings();
@@ -48,7 +60,10 @@ export function ActivePositions() {
   const [editAvgPrice, setEditAvgPrice] = useState("");
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
-  const isLoading = holdingsLoading || quotesLoading;
+  // Create price map from merged quotes
+  const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
+
+  const isLoading = holdingsLoading || (quotesLoading && quotes.length === 0);
 
   if (isLoading) {
     return (
@@ -66,8 +81,6 @@ export function ActivePositions() {
       </Card>
     );
   }
-
-  const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.price]));
 
   // Group holdings by type
   const cryptoHoldings = holdings.filter(h => h.type === "crypto");
