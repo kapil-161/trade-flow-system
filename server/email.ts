@@ -75,8 +75,9 @@ export async function sendPasswordResetEmail(
     return false;
   }
 
-  const appUrl = process.env.APP_URL || "http://localhost:5000";
+  const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:5000";
   const fullResetUrl = `${appUrl}/reset-password?token=${resetToken}`;
+  const emailConfig = await getEmailConfig();
 
   const mailOptions = {
     from: `"Trade Flow System" <${emailConfig.auth.user}>`,
@@ -164,6 +165,52 @@ export async function sendPasswordResetSuccessEmail(email: string): Promise<bool
   if (!mailTransporter) {
     return false;
   }
+
+  const emailConfig = await getEmailConfig();
+
+  const mailOptions = {
+    from: `"Trade Flow System" <${emailConfig.auth.user}>`,
+    to: email,
+    subject: "Password Reset Successful - Trade Flow System",
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Password Reset Successful</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
+              <p>Your password has been successfully reset.</p>
+              <p>If you did not make this change, please contact support immediately.</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message from Trade Flow System.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  };
+
+  try {
+    await mailTransporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error("Error sending success email:", error);
+    return false;
+  }
 }
 
 export async function sendTestEmail(toEmail: string): Promise<boolean> {
@@ -241,50 +288,5 @@ SMTP Settings:
   } catch (error) {
     console.error("Error sending test email:", error);
     throw error;
-  }
-}
-
-  const mailOptions = {
-    from: `"Trade Flow System" <${emailConfig.auth.user}>`,
-    to: email,
-    subject: "Password Reset Successful - Trade Flow System",
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>✅ Password Reset Successful</h1>
-            </div>
-            <div class="content">
-              <p>Hello,</p>
-              <p>Your password has been successfully reset.</p>
-              <p>If you did not make this change, please contact support immediately.</p>
-            </div>
-            <div class="footer">
-              <p>This is an automated message from Trade Flow System.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `,
-  };
-
-  try {
-    await mailTransporter.sendMail(mailOptions);
-    return true;
-  } catch (error) {
-    console.error("Error sending success email:", error);
-    return false;
   }
 }

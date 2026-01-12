@@ -11,7 +11,6 @@ import { Shield, Users, TrendingUp, History, Star, Loader2, Mail, Settings as Se
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface AdminUser {
@@ -472,7 +471,7 @@ function SMTPConfigSection() {
             id="smtp-secure"
             checked={smtpSettings.secure}
             onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, secure: checked })}
-            disabled={isSaving}
+            disabled={saveSettings.isPending}
           />
           <Label htmlFor="smtp-secure" className="cursor-pointer">
             Use SSL (port 465) instead of TLS (port 587)
