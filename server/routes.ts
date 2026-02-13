@@ -305,39 +305,80 @@ export async function registerRoutes(
                 volumeDivergence: "none",
               };
             }
+            // Trend context filter
+            // - Buy signals are allowed only above EMA200 when enabled
+            // - Sell signals are allowed only below EMA200 when enabled
+            const canBuy = !strategyConfig.trendFilter || isNaN(lastEma200) || lastClose >= lastEma200;
+            const canSell = !strategyConfig.trendFilter || isNaN(lastEma200) || lastClose <= lastEma200;
 
             // Calculate real-time score using the SAME logic as backtest
             let score = 0;
+            // Calculate directional scores using the SAME weights as backtest
+            let buyScore = 0;
+            let sellScore = 0;
 
             // 1. EMA Trend (3 points)
             if (lastClose > lastEmaFast && lastEmaFast > lastEmaSlow) {
               score += 3;
+              buyScore += 3;
+            }
+            if (lastClose < lastEmaFast && lastEmaFast < lastEmaSlow) {
+              sellScore += 3;
             }
 
             // 2. Volume Confirmation (2 points) - using actual volume vs average
+            // 2. Volume Confirmation (2 points) - stronger move when participation is elevated
             if (!isNaN(lastVolume) && !isNaN(lastAvgVolume) && lastVolume > lastAvgVolume * 1.2) {
               score += 2;
+              buyScore += 2;
+              sellScore += 2;
             }
 
             // 3. RSI Pullback zone (2 points) - only if RSI is in the sweet spot
+            // 3. RSI zone (2 points)
+            // Buy: pullback inside configured range
             if (lastRsi >= strategyConfig.rsiLower && lastRsi <= strategyConfig.rsiUpper) {
               score += 2;
+              buyScore += 2;
+            }
+            // Sell: overbought + reversal risk (avoid treating oversold as immediate sell)
+            if (lastRsi >= 70) {
+              sellScore += 2;
             }
 
             // 4. MACD Momentum (2 points)
             if (!isNaN(lastMacdHistogram) && !isNaN(prevMacdHistogram) && 
                 lastMacdHistogram > 0 && lastMacdHistogram > prevMacdHistogram) {
               score += 2;
+            if (!isNaN(lastMacdHistogram) && !isNaN(prevMacdHistogram)) {
+              if (lastMacdHistogram > 0 && lastMacdHistogram > prevMacdHistogram) {
+                buyScore += 2;
+              }
+              if (lastMacdHistogram < 0 && lastMacdHistogram < prevMacdHistogram) {
+                sellScore += 2;
+              }
             }
+
+            // Select stronger side only when it clears threshold with margin.
+            const scoreGap = Math.abs(buyScore - sellScore);
+            const signal =
+              canBuy && buyScore >= strategyConfig.scoreThreshold && buyScore > sellScore && scoreGap >= 2
+                ? "buy"
+                : canSell && sellScore >= strategyConfig.scoreThreshold && sellScore > buyScore && scoreGap >= 2
+                  ? "sell"
+                  : "hold";
+            const score = signal === "buy" ? buyScore : signal === "sell" ? sellScore : Math.max(buyScore, sellScore);
 
             return {
               symbol,
               signal: score >= strategyConfig.scoreThreshold ? "buy" : "hold",
+              signal,
               price: lastClose,
               emaFast: lastEmaFast,
               emaSlow: lastEmaSlow,
               rsi: lastRsi,
               score: Math.min(10, score), // Max score is 9, cap at 10 for display
+              score: Math.min(10, score), // Max directional score is 9, cap at 10 for display
               rsiDivergence: "none", // Keep for backward compatibility but not used in scoring
               volumeDivergence: "none", // Keep for backward compatibility but not used in scoring
             };
