@@ -347,9 +347,10 @@ export async function registerRoutes(
             }
 
             // 4. MACD Momentum (2 points)
-            if (!isNaN(lastMacdHistogram) && !isNaN(prevMacdHistogram) && 
+            if (!isNaN(lastMacdHistogram) && !isNaN(prevMacdHistogram) &&
                 lastMacdHistogram > 0 && lastMacdHistogram > prevMacdHistogram) {
               score += 2;
+            }
             if (!isNaN(lastMacdHistogram) && !isNaN(prevMacdHistogram)) {
               if (lastMacdHistogram > 0 && lastMacdHistogram > prevMacdHistogram) {
                 buyScore += 2;
@@ -367,17 +368,15 @@ export async function registerRoutes(
                 : canSell && sellScore >= strategyConfig.scoreThreshold && sellScore > buyScore && scoreGap >= 2
                   ? "sell"
                   : "hold";
-            const score = signal === "buy" ? buyScore : signal === "sell" ? sellScore : Math.max(buyScore, sellScore);
+            score = signal === "buy" ? buyScore : signal === "sell" ? sellScore : Math.max(buyScore, sellScore);
 
             return {
               symbol,
-              signal: score >= strategyConfig.scoreThreshold ? "buy" : "hold",
               signal,
               price: lastClose,
               emaFast: lastEmaFast,
               emaSlow: lastEmaSlow,
               rsi: lastRsi,
-              score: Math.min(10, score), // Max score is 9, cap at 10 for display
               score: Math.min(10, score), // Max directional score is 9, cap at 10 for display
               rsiDivergence: "none", // Keep for backward compatibility but not used in scoring
               volumeDivergence: "none", // Keep for backward compatibility but not used in scoring
